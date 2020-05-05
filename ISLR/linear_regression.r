@@ -13,6 +13,15 @@ boston <- as_tibble(Boston)
 
 linear<- lm(medv ~ lstat, data = boston)
 
+# summary 
+
+broom::glance(linear)
+
+
+broom::tidy(linear)
+
+broom::augment(linear)
+
 # elements in the model
 
 names(linear)
@@ -62,3 +71,6 @@ dev.off()
 multiple_linear <- lm(medv ~ ., data = boston)
 
 summary(multiple_linear)$coefficients
+
+
+glance(linear)
