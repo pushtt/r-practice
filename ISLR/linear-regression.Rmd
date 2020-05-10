@@ -118,23 +118,41 @@ Remove addidive assumptions by add interaction term
 categorical_mod <- credit %>% 
   lm(balance ~ income + student, data = .)
 
-credit %>% 
+p1 <- credit %>% 
   add_predictions(categorical_mod) %>% 
   ggplot(aes(income, pred, colour = student)) + 
-  geom_line()
+  geom_line(size = 1) + 
+  labs(
+    x = "Income",
+    y = "Balance Account",
+    title = "Linear regression of balance on income for studenst and non-students",
+    subtitle = "Without interaction term"
+  )
+p1
 ```
 
 
 ```{r}
-credit %>% 
+p2 <- credit %>% 
   ggplot(aes(income, balance, colour = student)) + 
-  geom_smooth(method = "lm", se = FALSE)
-
-
+  geom_smooth(method = "lm", se = FALSE) + 
+  labs(
+    x = "Income",
+    y = "Balance Account",
+    title = "Linear regression of balance on income for studenst and non-students",
+    subtitle = "With interaction term"
+  )
+p2
 ```
 
+```{r}
+library(gridExtra)
+grid.arrange(p1, p2, ncol = 2)
+```
 
+## Non-linear relationship
 
-
-
+```{r}
+auto <- read_csv("ISLR/ISLR-Auto/Auto.csv")
+```
 
