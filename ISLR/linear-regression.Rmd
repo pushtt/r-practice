@@ -152,7 +152,40 @@ grid.arrange(p1, p2, ncol = 2)
 
 ## Non-linear relationship
 
+Approach: *polynominal regression*
+
 ```{r}
-auto <- read_csv("ISLR/ISLR-Auto/Auto.csv")
+auto <- as_tibble(ISLR::Auto)
+mod1 <- auto %>% 
+  lm(mpg ~ poly(horsepower,1), data = .) 
+
+mod2 <- auto %>% 
+  lm(mpg ~ poly(horsepower,2), data = .) 
+
+mod5 <- auto %>% 
+  lm(mpg ~ poly(horsepower,5), data = .)
+
+predictions <- auto %>% 
+  gather_residuals(Linear = mod1, Degree2 = mod2, Degree = mod5) %>% 
+  gather_predictions(Linear = mod1, Degree2 = mod2, Degree5 = mod5)
+
+
+auto %>% 
+  ggplot(aes(horsepower, mpg)) + 
+  geom_point(size = 2, shape = 1, alpha = 0.5) + 
+  geom_line(data = predictions,
+            aes(horsepower, pred, colour = model))
+```
+
+## Potential Problems 
+
+### Non-linearity
+
+```{r}
+predictions %>% 
+  ggplot(aes(pred, resid)) +
+  geom_point(size = 2, shape = 1, alpha = 0.2) +
+  geom_smooth(se = FALSE) +
+  facet_wrap(~ model, scales = "free")
 ```
 
