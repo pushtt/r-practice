@@ -1,0 +1,142 @@
+---
+title: "Models with broom and purrr"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+theme_set(theme_light())
+```
+
+
+```{r}
+library(gapminder)
+gapminder %>% 
+  count(country)
+
+nz <- gapminder %>%
+  filter(country == "New Zealand")
+
+full <- nz %>% 
+  ggplot(aes(year, lifeExp)) + 
+  geom_line() + 
+  ggtitle("Full data = ") 
+
+```
+
+Linear regression 
+
+```{r}
+nz_mod <- nz %>% 
+  lm(lifeExp ~ year, data = .)
+
+library(modelr)
+grid <- nz %>% 
+  data_grid(year) %>% 
+  add_predictions(nz_mod) 
+
+linear <- grid %>% 
+  ggplot(aes(year, pred)) + 
+  geom_line() + 
+  ggtitle("Linear")
+```
+
+```{r}
+resid_pattern <- nz %>% 
+  add_residuals(nz_mod) %>% 
+  ggplot(aes(year, resid)) + 
+  geom_ref_line(h = 0, colour = "grey") +
+  geom_line() + 
+  ggtitle("Resid")
+```
+
+```{r}
+library(gridExtra)
+grid.arrange(full, linear, resid_pattern, ncol = 3)
+```
+
+
+### How can we plot these for all countries? 
+
+Instead of repeating for each variable, we repeat of each observation of a variable
+
+```{r}
+by_country <- 
+  gapminder %>% 
+  group_by(country, continent) %>% 
+  nest()
+```
+
+**Step1** model across the dataframe
+
+```{r}
+country_model <- function(df) {
+  lm(lifeExp ~ year, data = df)
+}
+```
+
+```{r}
+by_country <- by_country %>% 
+  mutate(model = map(data, country_model))
+
+by_country <- by_country %>% 
+  mutate(resids = map2(data, model, add_residuals))
+
+resids <- by_country %>% 
+  unnest(resids)
+```
+
+Finally we get the data frame.
+Now we can plot 
+```{r}
+resids %>% 
+  ggplot(aes(year, resid, group = country)) +
+  geom_line(alpha = 0.3) + 
+  facet_wrap(~continent)
+```
+
+It seems our model doesn't fit the Africa well which suggests something interesting there
+
+### Out of residuals, model quality is another approach 
+
+```{r}
+library(broom)
+glance(nz_mod)
+```
+
+
+```{r}
+model_quality <- by_country %>% 
+  mutate(glance = map(model, glance)) %>% 
+  unnest(glance) %>% 
+  select(-is.list) %>% 
+  arrange(r.squared)
+```
+
+Most of the worst models are in Africa 
+
+```{r}
+model_quality %>% 
+  ggplot(aes(continent, r.squared)) + 
+  geom_jitter(width = 0.5)
+ 
+```
+
+Zoom in R-square that is small
+```{r}
+bad_fit <- model_quality %>% 
+  filter(r.squared < 0.25)
+
+gapminder %>% 
+  semi_join(bad_fit, by = "country") %>% 
+  ggplot(aes(year, lifeExp, colour = country)) + 
+  geom_line()
+```
+

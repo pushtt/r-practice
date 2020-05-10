@@ -1,0 +1,133 @@
+---
+title: "Linear Regressions"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+# What is a simple linear regression? 
+
+
+```{r}
+library(tidyverse)
+theme_set(theme_light())
+```
+
+```{r}
+adversiting <- read_csv("ISLR/ISLR-Auto/Advertising.csv")
+
+adversiting <- adversiting %>% 
+  select(-X1)
+
+adversiting_tided <- adversiting %>% 
+  select(-X1) %>% 
+  gather(channel, budget , -Sales) %>% 
+  rename_with(tolower)
+
+```
+
+```{r}
+library(modelr)
+
+TV_data <- adversiting_tided %>% 
+  filter(channel == "TV")
+
+smod <- lm(sales ~ budget, data = TV_data)
+  
+grid <- TV_data %>% 
+  add_predictions(smod)
+
+
+TV_data %>% ggplot(aes(budget, sales)) +
+  geom_point(colour = "red") +
+  geom_smooth(method = "lm", se = FALSE) + 
+  geom_segment(data = grid, 
+               aes(xend = budget, yend = pred),
+               colour = "grey",
+               alpha = 0.5)
+```
+
+
+## Estimate the coefficients 
+
+
+```{r}
+library(broom)
+tidy(smod)
+```
+
+p-value is relatively big so we safely conclude that coefficients are different from 0. 
+
+## Accuracy of model 
+
+* Residual standard error (RSE): lack of fit
+* Rsquared: proportion of variability in Y that can be explained using X
+```{r}
+glance(smod)
+```
+
+In general, actual sales in each market deviate from the true regression line by approximately 3,260 units, on average. Two-thirds of the variability in sales is explained by a linear regression on TV.
+
+
+# What is a multiple linear regression? 
+
+```{r}
+mmod <- lm(Sales ~ TV + Radio + Newspaper, data = adversiting)
+```
+
+* Coefficients 
+
+
+``` {r}
+tidy(mmod)
+```
+
+* Statistics
+``` {r}
+glance(mmod)
+```
+
+### Questions
+
+* Is There a Relationship Between the Response and Predictors?
+* Model fit
+* Prediction and confident interval 
+
+## Qualitative Preditors
+
+```{r}
+credit <- read_csv("ISLR/ISLR-Auto/Credit.csv")
+
+credit <- credit %>% 
+  select(-X1) %>% 
+  rename_with(tolower)
+```
+
+
+```{r}
+lm(balance ~ gender, data = credit)
+
+lm(balance ~ ethnicity, data = credit)
+```
+
+## Extension of Linear model 
+
+Remove addidive assumptions by add interaction term 
+
+```{r}
+categorical_mod <- credit %>% 
+  lm(Sales ~ TV*Radio, data = .)
+```
+
+
+```{r}
+credit %>% 
+  ggplot(aes(income, balance, colour = student)) + 
+  geom_smooth(method = "lm", se = FALSE)
+```
+
+
+
+
+
+
