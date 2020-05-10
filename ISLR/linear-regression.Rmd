@@ -116,7 +116,12 @@ Remove addidive assumptions by add interaction term
 
 ```{r}
 categorical_mod <- credit %>% 
-  lm(Sales ~ TV*Radio, data = .)
+  lm(balance ~ income + student, data = .)
+
+credit %>% 
+  add_predictions(categorical_mod) %>% 
+  ggplot(aes(income, pred, colour = student)) + 
+  geom_line()
 ```
 
 
@@ -124,6 +129,8 @@ categorical_mod <- credit %>%
 credit %>% 
   ggplot(aes(income, balance, colour = student)) + 
   geom_smooth(method = "lm", se = FALSE)
+
+
 ```
 
 
