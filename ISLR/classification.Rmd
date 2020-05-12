@@ -1,0 +1,66 @@
+---
+title: "Classification"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+Basic question: Which one is what?
+
+
+```{r}
+library(tidyverse)
+theme_set(theme_light())
+```
+
+```{r}
+default <- ISLR::Default %>% as_tibble()
+
+default %>% 
+  ggplot(aes(balance, income, colour = default)) +
+  geom_point(alpha = 0.3, size = 5, shape = 1) +
+  scale_x_continuous(breaks = seq(0, 2500, 500))
+
+
+default %>% 
+  ggplot(aes(default, balance, fill = default)) +
+  geom_boxplot() + 
+  scale_y_continuous(breaks = seq(0, 2500, 500))
+
+default %>% 
+  ggplot(aes(default, income, fill = default)) +
+  geom_boxplot()
+
+test <- default %>% 
+  mutate(default = ifelse(default == "Yes", 1, 0),
+         student = ifelse(student == "Yes", 1, 0))
+
+```
+
+Let's fix in logistic regression model
+
+```{r single variable}
+library(modelr)
+mod1 <- lm(default ~ balance, data = test)
+mod2 <- glm(default ~ balance, data = test, family = binomial)
+mod3 <- glm(default ~ income, data = test, family = binomial)
+mod4 <- glm(default ~ balance + income + student , data = test, family = binomial)
+
+test %>% 
+  gather_predictions(linear = mod1, 
+                     logistic_balance = mod2, 
+                     logistic_income = mod3, 
+                     logstic_multiple = mod4,
+                     .pred = "prob",
+                      type = "response") %>% 
+  ggplot(aes(balance, prob, colour = model)) +
+  geom_hline(yintercept = c(0,1), linetype = 2) +
+  geom_line() + 
+  facet_wrap(~ model)
+
+library(broom)
+tidy(mod2) 
+
+```
+
+
