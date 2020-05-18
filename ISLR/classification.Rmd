@@ -5,16 +5,17 @@ editor_options:
   chunk_output_type: console
 ---
 
-*Basic question*: Which one is what?
+# Content 
 
 
 ```{r}
 library(tidyverse)
+library(dplyr)
 theme_set(theme_light())
 ```
 
 ```{r}
-default <- ISLR::Default %>% as_tibble()
+default <- ISLR::Default %>% tibble()
 
 default %>% 
   ggplot(aes(balance, income, colour = default)) +
@@ -72,4 +73,201 @@ pred %>%
 
 ```
 
+
+# Lab
+
+## Stock Market
+```{r}
+library(janitor)
+smarket <- tibble(ISLR::Smarket) %>% 
+  clean_names()
+```
+
+### Overview 
+```{r}
+
+glimpse(smarket)
+
+skimr::skim(smarket)
+```
+
+### Question about correlation between variables 
+
+```{r}
+library(corrr)
+smarket %>% 
+  select(-direction) %>% 
+  correlate() %>% 
+  rearrange() %>% 
+  shave()
+```
+
+```{r}
+plot(smarket$volume)
+```
+
+```{r}
+smarket %>% 
+  mutate(rnb = row_number(year)) %>% 
+  ggplot(aes(rnb, volume)) + 
+  geom_point(alpha = 0.5, colour = "grey", size = 2) +
+  geom_smooth(method = "lm")
+```
+We see the upper trend of trading volume
+
+### Logistic Regression 
+
+```{r build model}
+smarket_features <- smarket %>% 
+  select(-year, -today)
+  
+glm_mod <- smarket_features %>% 
+  glm(direction ~ ., data = ., family = binomial)
+  
+summary(glm_mod)
+coef(glm_mod)
+```
+
+```{r extract coefficient and p value}
+library(broom)
+library(modelr)
+
+tidy(glm_mod)
+```
+
+```{r predict}
+grid_glm <- smarket_features %>%
+  add_predictions(glm_mod, type = "response") %>% 
+  mutate(pred_label = ifelse(pred >.5, "Up", "Down"))
+
+# percentage of prediction accuracy 
+mean(grid_glm$pred_label == grid_glm$direction) 
+```
+
+### Train/Test
+
+```{r}
+train <- smarket %>% 
+  filter(year < 2005) %>% 
+  select(direction, lag1, lag2)
+
+test <- smarket %>% 
+  filter(year >= 2005) %>% 
+  select(direction, lag1, lag2)
+
+train_glm_mod <- glm(direction ~ ., data = train, family = binomial)
+
+test %>% 
+  add_predictions(train_glm_mod, type = "response") %>% 
+  mutate(pred_label = ifelse(pred >= .5, "Up", "Down")) %>% 
+  count(direction, pred_label) %>% 
+  mutate(prop = n/sum(n)) %>% 
+  pivot_wider(names_from = pred_label, values_from = c(n,prop))
+
+```
+
+### Linear Discriminant Analysis
+
+```{r}
+train_lda_mod <- MASS::lda(direction ~ ., data = train)
+
+test %>% 
+  mutate(pred = predict(train_lda_mod, newdata = test)$class) %>% 
+  count(direction, pred) %>% 
+  mutate(prop = n/sum(n)) %>% 
+  pivot_wider(names_from = pred, values_from = c(n,prop))
+
+```
+
+
+### Quadratic Discriminant Analysis 
+
+```{r}
+train_qda_mod <- MASS::qda(direction ~., data = train)
+
+test %>% 
+  mutate(pred = predict(train_qda_mod, newdata = test)$class) %>% 
+  count(direction, pred) %>% 
+  mutate(prop = n/sum(n)) %>% 
+  pivot_wider(names_from = pred, values_from = c(n, prop))
+```
+
+
+
+### K-Nearest Neighbours 
+
+```{r}
+train_knn_x <- train %>% 
+  select(lag1, lag2)
+
+test_knn_x <- test %>% 
+  select(lag1, lag2)
+
+train_direction <- train$direction
+```
+
+```{r}
+set.seed(1)
+library(class)
+test %>% 
+  mutate(pred = knn(train_knn_x, test_knn_x, train_direction, k = 3),
+         accuracy = sum(mean(pred == direction)))
+```
+
+
+
+### Application on Caravan Insurance 
+
+```{r}
+caravan <- tibble(ISLR::Caravan) %>% 
+  janitor::clean_names()
+
+# Overview
+glimpse(caravan)
+```
+
+```{r}
+# Get an idea about distribution
+skimr::skim(caravan)
+```
+
+
+```{r}
+caravan_normalised <- caravan %>%
+  mutate(across(-c("purchase"), scale))
+
+caravan_variables <- caravan_normalised %>% select(-purchase)
+
+caravan_test <- caravan_normalised %>% 
+  head(1000)
+
+caravan_test_knn_x <- caravan_test %>% select(-purchase)
+
+caravan_train <- caravan_normalised %>% 
+  anti_join(caravan_test_knn_x)
+
+caravan_train_x <- caravan_train %>% select(-purchase)
+
+caravan_train_knn_purchase <- caravan_train %>% 
+  pull(purchase)
+
+
+set.seed(1)
+
+caravan_test_knn %>% 
+  mutate(pred = knn(caravan_train_knn_x, caravan_test_knn_x, caravan_train_knn_purchase, k =3)) %>% 
+  count(purchase, pred, sort = TRUE) %>% 
+  mutate(prop = n/sum(n))
+```
+
+### Compare with Logistic Regression 
+
+```{r}
+caravan_glm_mod <- glm(purchase ~ ., data =  caravan_train, family = binomial)
+
+caravan_test %>% 
+  add_predictions(caravan_glm_mod, type = "response") %>% 
+  mutate(pred = ifelse(pred >=.25, "Yes", "No")) %>% 
+  count(purchase, pred)
+```
 
