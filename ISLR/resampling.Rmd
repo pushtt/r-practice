@@ -1,0 +1,44 @@
+---
+title: "Resampling"
+output: html_notebook
+---
+```{r}
+library(tidyverse)
+library(modelr)
+library(broom)
+library(ISLR)
+
+```
+
+```{r}
+set.seed(1)
+
+train <- sample(392,196)
+auto <- tibble(Auto)
+```
+
+### Linear regression 
+
+```{r}
+lm_fit <-  lm(mpg ~ horsepower ,data = auto, subset = train)
+lm_fit2 <- lm(mpg ~ poly(horsepower, 2) ,data = auto, subset = train)
+lm_fit3 <- lm(mpg ~ poly(horsepower, 3) ,data = auto, subset = train)
+
+auto %>% 
+  slice(-train) %>% 
+  gather_predictions(lm_fit, lm_fit2, lm_fit3) %>% 
+  group_by(model) %>% 
+  summarise(mse = mean((mpg - pred)^2))
+```
+
+### Linear regression with polynominal predictors 
+```{r}
+
+
+auto %>% 
+  slice(-train) %>% 
+  add_predictions(lm_fit2) %>% 
+  summarise(mse = mean((mpg - pred)^2))
+
+```
+

@@ -1,0 +1,14 @@
+---
+title: "Programming"
+output: html_notebook
+---
+
+```{r}
+library(magrittr)
+```
+
+## Piping Alternative 
+```{r}
+
+```
+
