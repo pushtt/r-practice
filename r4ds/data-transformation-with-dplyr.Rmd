@@ -1,0 +1,242 @@
+---
+title: 'Data Transformation with dplyr '
+author: thinh
+date: '2020-04-04'
+slug: data-transformation-with-dplyr
+categories:
+  - rfds
+tags:
+  - R
+comments: no
+cover: ''
+imgs: []
+justify: no
+lastmod: '2020-04-04T14:35:07+07:00'
+license: ''
+readingTime: yes
+single: no
+output: 
+  html_document: 
+    theme: cosmo
+    toc: yes
+---
+# Prerequisites
+```{r}
+library(tidyverse)
+library(nycflights13)
+```
+## nyclights13
+ Data types of the variables:
+ 
+- `int`: integers
+- `dbl`: double/real numbers 
+- `chr`: character/string
+- `dttm`: date + time
+- `lgl`: logical. `TRUE` OR `FALSE`
+- `fctr`: factors -> categorical data with fixed possible values
+- `date`: dates
+
+## dplyr Basics
+
+Key functions: 
+
+- pick observations - `filter()` - deal with rows 
+- pick variables - `select()` - deal with columns 
+- create new variable - `mutate()` - insert a new columns 
+- reorder the rows - `arrange()` 
+- collapse values into a single summary - `summarize()`
+ 
+Used in conjunction with `group_by`
+
+How it works: data.frame -> arguments -> result
+
+# Filter rows with filter() 
+- subset observations based on their values. 
+
+```{r}
+filter(flights, month == 1, day == 1)
+```
+
+## Comparisons & Logical Operators
+- Comparisons: `>`, `<`, `=`, `>=`,`<=`, `==`, `!=`
+- Logical operators: `&` , `|`
+- To simplify `x == 1 | x == 2`, we can apply `x %in% c(1,2)` 
+
+```{r}
+filter(flights, month %in% c(1,2))
+```
+
+## Missing values 
+```{r}
+# not available
+NA
+```
+determine a observation is NA
+
+```{r}
+x <- NA
+is.na(x)
+```
+
+# Arrange rows with arrange()
+- similar to `filter()`
+```{r}
+arrange(flights, year, month, day)
+```
+
+- use desc(x) to reorder in descending order
+
+```{r}
+arrange(flights, desc(month))
+```
+
+# Select columns with select()
+- to zoom quickly to the subset
+```{r}
+select(flights, year, month, day)
+```
+
+- select all columns between a and b 
+
+```{r}
+select(flights, year:day)
+```
+
+- select all columns except a and b 
+
+```{r}
+select(flights, -(year:day))
+```
+
+- reorder columns 
+
+```{r}
+select(flights, day, everything()) # put day to the first column and keep same for everything
+```
+
+
+# Add new variable with mutate()
+- `mutate()` always add a new variable at the end of the dataset
+
+```{r}
+flights_test <- select(flights, 
+                       year:day, 
+                       ends_with("delay"), 
+                       distance, 
+                       air_time)
+mutate(flights_test, 
+       gain = arr_delay - dep_delay,# new variable 1 
+       speed = distance/ air_time * 60, # new variable 2 
+       hours = air_time/60, # new variable 
+       gain_per_hour = gain/hours # new variable by using new variable 1&3
+       )
+```
+
+- show only new varialbe then we use `transmute`
+
+```{r}
+transmute(flights_test, 
+       gain = arr_delay - dep_delay,# new variable 1 
+       speed = distance/ air_time * 60, # new variable 2 
+       hours = air_time/60, # new variable 
+       gain_per_hour = gain/hours # new variable by using new variable 1&3
+       )
+```
+
+## Useful creation with mutate()
+- *Arithmetic operator*: `+, -, /, *, ^`
+- *Modular arithmetic*: %/% (integer), %/% (remainder)
+- *Log*: log()
+- *Offsets*: lag(), lead()
+- *Cumulative and rolling aggregates*: `cumsum()`, `cumprod()`, `cumnin()`, `cummax()`, `cummean()`
+- *Logical comparisons*: `<, <=, >, >=, !=, ==`
+- *Ranking*: `min_rank()`, `row_number()`, `dense_rank()`, `percent_rank()`
+
+# Grouped Summary with summarize()
+- collapse data into a single row
+
+```{r}
+# average dep delay
+summarise(flights, delay = mean(dep_delay, na.rm = TRUE)) # drop missing value 
+```
+- combining with `group_by` makes it more useful 
+```{r}
+# average dep delay per day
+by_day <- group_by(flights, year, month, day)
+summarise(by_day, delay = mean(dep_delay, na.rm = TRUE)) 
+```
+
+## Combining Multiple Operators with the Pipe
+- Explore the relationship between distance and average delay for each location. 
+
+```{r}
+delay <- flights %>%
+  group_by(dest) %>% 
+  summarise(
+    count = n(),
+    dist = mean(distance, na.rm = TRUE),
+    delay = mean(arr_delay, na.rm = TRUE)
+  ) %>% 
+  filter(count > 20, dest != "HML")
+```
+ 
+- pronounce `%>%`  as `then`. Behind the scences, `x %>% f(y)` is equivalent to `f(x,y)`. `x %>% f(y) %>% g(z)` is equivalent to `g(f(x,y), z)`
+
+## Missing Values
+If we don't put `na.rm` into the `summarise()`, then the result is NA as expected 
+```{r}
+flights %>% 
+  group_by(year, month, day) %>% 
+  summarise(mean = mean(dep_delay)) 
+```
+
+In this case, the missing values represent for the cancelled flights. We can remove them for the dataset as 
+
+```{r}
+not_cancelled <- flights %>% 
+  filter(!is.na(dep_delay), !is.na(arr_delay) )
+
+not_cancelled %>% 
+  group_by(year, month, day) %>% 
+  summarise(mean = mean(dep_delay))
+```
+
+# Counts 
+-  a count `n()` or a count of non missing values `sum(!is.na(x))`
+
+**Question**: WHich planes have the highest average delays? 
+Planes are defined by their tail number
+
+```{r}
+delays <- not_cancelled %>% 
+  group_by(tailnum) %>% 
+  summarise(delay = mean(arr_delay))
+
+ggplot(data = delays, 
+       mapping = aes(x = delay)) + 
+  geom_freqpoly(binwidth = 10)
+```
+
+Number of flights versus average delay 
+
+```{r}
+delays <- not_cancelled %>% 
+  group_by(tailnum) %>% 
+  summarise(delay = mean(arr_delay),
+            n = n() # number flight
+            )
+
+ggplot(data = delays, 
+       mapping = aes(x = n, y = delay)) +
+  geom_point(alpha = 1/10)
+```
+
+There is much variations when there are few flights. So we filter out the group with the smallest numbers of observation 
+
+```{r}
+delays %>%
+  filter(n > 25) %>% 
+  ggplot(mapping = aes(x = n, y = delay)) +
+  geom_point(alpha = 1/10)
+```
+

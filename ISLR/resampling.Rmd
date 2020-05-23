@@ -1,6 +1,8 @@
 ---
 title: "Resampling"
 output: html_notebook
+editor_options: 
+  chunk_output_type: console
 ---
 ```{r}
 library(tidyverse)
@@ -31,14 +33,25 @@ auto %>%
   summarise(mse = mean((mpg - pred)^2))
 ```
 
-### Linear regression with polynominal predictors 
+### Leave-One-Out Cross-Validation
+
 ```{r}
+glm_fit <- glm(mpg ~ horsepower, data = auto, subset = train)
 
-
-auto %>% 
-  slice(-train) %>% 
-  add_predictions(lm_fit2) %>% 
-  summarise(mse = mean((mpg - pred)^2))
-
+print(glm_fit)
+library(boot)
+cv.glm(auto, glm_fit)$delta
 ```
+
+
+### Function to apply glm for high polynominal at once 
+
+```{r}
+rm(glm_fit_i)
+```
+
+
+
+
+
 

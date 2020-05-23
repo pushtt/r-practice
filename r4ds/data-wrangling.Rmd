@@ -1,0 +1,846 @@
+---
+title: Data Wrangling/ Visualisation
+author: thinh
+date: '2020-04-11'
+slug: data-wrangling
+categories:
+  - Training
+tags:
+  - R
+  - Book
+comments: no
+cover: ''
+imgs: []
+justify: no
+lastmod: '2020-04-11T10:24:49+07:00'
+license: ''
+readingTime: yes
+single: no
+toc: yes
+---
+# Loading Packages 
+
+```{r}
+# loading packages --------------------------------------------------------
+library(tidyverse)
+# dplyr wrangling, glimpse(), tbl_df()
+# ggplot2 visualisation
+# readr reading of csv
+# tibble dataframe
+# tidyr tidy dataset
+library(rattle) # weatherAUS data and normVarNames()
+library(scales) # format comma
+library(stringr) # string operation
+library(stringi) # string concat
+library(magrittr) # pipes
+library(lubridate)
+```
+
+
+# Data Ingestion 
+
+## Import Data 
+
+```{r}
+ds <- rattle::weatherAUS
+```
+
+## Shape of data
+
+**Dimension** 
+
+```{r}
+# dim
+dim(ds) %>% rattle::comcat()
+# row
+nrow(ds) %>% comcat()
+# column
+ncol(ds) %>% comcat()
+```
+
+**Glimpse**
+
+```{r}
+glimpse(ds)
+```
+
+
+## Normalising Variable Names
+**Get the variable names **
+
+```{r}
+names(ds)
+```
+These name are mixed with different conventions: upper and lower characters. It's convenient to simplify the variable names to ease the process of data. R is case senstitive, so it saves the hassle if the variable names are either lower or upper case. 
+
+```{r}
+(names(ds) %<>% normVarNames()) # pipe then assign back
+```
+
+# Data Review 
+
+## Structure 
+Summary of data structure. Then we can confirm the data types and have a look on a few values of variables.
+```{r}
+glimpse(ds)
+```
+
+## Content 
+Review the contents with a few rows  with `head()`, `tail()`
+```{r}
+head(ds)
+```
+
+It's good to have a look on a random sample from the dataset as wee
+
+```{r}
+set.seed(2) # reproducible later
+sample_n(ds, size = 10)
+```
+
+# Data Cleaning 
+## Identifying Factors
+Start with `location`
+
+```{r}
+ds %>% 
+  select(location) %>% 
+  n_distinct
+```
+
+```{r}
+ds$location %<>% as_factor() # cast as a factor 
+ds %>% 
+  select(location) %>% 
+  group_by(location) %>% 
+  summarise(n = n())
+```
+
+Have a look on the `rain` variables
+
+```{r} 
+ds %>%
+  select(starts_with("rain_"), contains("_dir")) %>% # distribution table 
+  summarise_all(length) %>% 
+  glimpse()
+```
+
+Cast multiple variables as factor variable 
+```{r}
+# assign variable names to prepare for convert 
+varnames <- ds %>% 
+  select(starts_with("rain_"), contains("_dir")) %>% 
+  names()
+
+# check the origin class 
+ds[varnames] %>% sapply(class) # apply to each variable 
+
+# convert to new class
+
+ds[varnames] %<>% # select variables 
+  lapply(factor) # apply factor to each column 
+
+ds[varnames] %>% sapply(class)
+
+```
+
+## Normalised factos
+Some variables will have *levels with spaces, and mixture of cases*, etc. It's good practice to normalise the level of a factor variable .
+
+```{r}
+# get which variables are factor 
+ds %>% 
+  sapply(is.factor) %>% # check factor - return true false
+  which() %T>% # return index
+  print() -> 
+catc 
+
+for(v in catc)
+  levels(ds[[v]]) %<>% normVarNames()
+
+glimpse(ds[catc])
+```
+
+## Ensure Target is a Factor  
+Building classification models -> target is categoric --> generall (0,1) then is loaded as numeric --> convert required
+
+```{r}
+# note the target variable 
+
+target <- "rain_tomorrow"
+
+# Ensure the target is a factor 
+
+ds[[target]] %<>% as_factor() # 
+
+# Confirm the distribution 
+
+ds %>% 
+  select(target) %>%
+  sapply(table)
+```
+
+It's good idea to visualise the distribution 
+
+```{r}
+ds %>%
+  ggplot(aes_string(x = target)) + # this the values of variable 
+  geom_bar() +
+  theme(tex = element_text(size = 14)) + 
+  scale_y_continuous(labels = comma) + # change scale and formart with comma 
+  labs(
+    title = "Distribution of Rain Tomorrow",
+    x = "Rain Tomorrow",
+    y = "Count",
+    caption = "Source: weatherAUS"
+  )
+```
+
+# Varialbe Roles 
+Identify the roles that the variables play in the table
+
+```{r}
+(vars <- ds %>% 
+  names()) 
+```
+
+In this case, to build a predictive analytics model to predict the chance of it raining tomorrow given observation today.
+Hence, `rain_tomorrow` is the *target variable*. The dataset we have acts as a training dataset. The task is to identify any patterns that suggest it rains the following day.
+
+
+```{r}
+target <- "rain_tomorrow"
+
+# place the target at the beginning of vars 
+
+(vars <- c(target, vars) %>%
+  unique())
+
+```
+
+Another variable to take care is *risk variable* `risk_mm` which is related to the outcome rather than today's observation. It measures the amount of rain that fell tomorrow. 
+Since it's not independent, we exclude it in `vars`
+
+```{r}
+risk <- "risk_mm"
+```
+
+Finanlly, `date` and `locations` act as identifiers. These helps us to observe the remaining variables so we shall exclude as well
+
+```{r}
+id <- c("date", "location")
+```
+
+# Feature Selection 
+
+Identify the variables that are irrelevant for modelling 
+
+## IDs and Outputs 
+
+```{r}
+# Initialise ignored variables: identifiers and risk
+
+(ignore <- id %>% 
+  union(if (exists("risk")) risk))
+```
+
+Also check for variables that have a unique value for every observation. These are often identifiers and if so they are candidates for ignoring.
+
+
+```{r}
+ids <- ds %>% 
+  select(all_of(vars)) %>% 
+  # count distinct all values in each columsn
+  summarise_all(n_distinct) %>% 
+  # select columns has unique values = nrow
+  select_if(~min(.) == nrow(ds)) %>% 
+  names() 
+
+# add to ignore
+(ignore <- union(ignore, ids)) # we use union to avoid duplicate just in case 
+```
+
+Let's take an example for the script above
+
+```{r}
+# Engineer the data to illustrate identifier selection. 
+
+ods <- ds # Take a backup copy of the original dataset.
+
+ds %<>% filter(location=="sydney")
+
+ds %>% 
+  select(all_of(vars)) %>% 
+  # count distinct all values in each columsn
+  summarise_all(n_distinct) %>% 
+  # select columns has unique values = nrow
+  select_if(~min(.) == nrow(ds)) %>% 
+  names() # Restore the original dataset.
+
+ds <- ods
+```
+
+## Missing Data 
+Next, we remove the variables that contains only missing values 
+
+```{r}
+(missing <- ds %>% 
+   select(all_of(vars)) %>% 
+  # set all values from all variable are na 
+   summarise_all(~sum(is.na(.))) %>% 
+  # count na rows 
+   summarise_all(n_distinct) %>% 
+   # compare number NAs with nrows
+   select_if(~min(.) == nrow(ds)) %>% 
+   names())
+
+# add them to ignore 
+ignore %<>% 
+  union(missing)
+
+ignore
+```
+There are no variables that contain only NAs. We engineer a dataset with all missing values for some variables to illustrate the pipeline in action
+
+```{r}
+ods <- ds # Take a backup of the dataset
+
+ds %<>% filter(location == "albury")
+ds %>% select(location) %>% unique()
+ds %>% 
+  # Count NA in each variable
+  summarise_all(~sum(is.na(.))) %>% 
+  # compare number NA with nrows, 
+  select_if(~min(.) == nrow(ds)) %>%
+  names()
+
+ds <- ods
+```
+
+
+## Many Missing 
+
+It's also useful to identify the varialbes with most of values being missing. Let's decide a threshold to drop them out of the `vars`, say 80%
+
+```{r}
+# Identify the threshold to classify as fatal 
+
+missing.threshold <- 0.8
+
+# Identify variables that are mostly missing 
+
+mostly <- ds %>% 
+  summarise_all(~sum(is.na(.))) %>%  # apply sum(is.na()) to all variables
+  mutate_all(~(./nrow(ds))) %>%  # apply all vars with x/nrows
+  select_if(~min(.) >= missing.threshold) %>%  # which var meet the threshold
+  names() # name of var
+
+ignore %<>% union(mostly)
+ignore
+```
+
+## Too Many Levels
+Another issue are factors that have very many levels. So we might ignore such variables or group them appriopriately 
+
+```{r}
+# Identify a threshold above which we have too many levels 
+
+levels.threshold <- 20
+
+# Identify the variables having too many levels
+
+too.many <- ds %>%
+  select_if(is.factor) %>% # select all factor variables
+  summarise_all(~n_distinct(.)) %>% 
+  select_if(~min(.) > levels.threshold) %>% 
+  names()
+
+# add to ignore in vars 
+
+(ignore %<>% union(too.many))
+```
+
+The location was on the list already, so there is no change. That's why we tend to use union in the first place
+
+## Constants
+
+The variables with a constant value add no extra information to the analysis -> should be ignored also 
+
+```{r}
+constants <- ds %>% 
+   summarise_all(~n_distinct(.)) %>% 
+   select_if(~min(.) == 1) %>% 
+   names()
+
+# Add them to ignore for modelling 
+(ignore %<>% union(constants))
+```
+
+## Correlated Variables
+
+Identifying and removing highly correlated variables are useful when modelling since they imply he same information but in different ways. 
+Correlated variables can often arise when we combine data from different sources.
+
+- Identify numeric variables on which we calculate correlations 
+- Remove the high correlated variables 
+
+```{r}
+# Extract numeric variable's names
+
+numc <- ds %>% 
+  select_if(is.numeric) %>% 
+  names()
+
+# Correlation between numeric variables 
+
+ds %>% 
+  select(all_of(numc)) %>%  # extract all numeric variables
+  corrr::correlate(use = "complete.obs" ) %>%  # correlation as a tibble
+  corrr::shave() %>%  # triangle correlation to remove duplicate 
+  corrr::stretch(na.rm = TRUE) %>%  # omit NA from correlation 
+  arrange(desc(abs(r))) %>% 
+  head(10)## arrange descending absolute value
+```
+
+Noramlly we will remove those correlations above 0.9. Here we pick up `temp_3pm`, `pressure_3pm`, `temp_9am` 
+
+```{r}
+# correlated variables are redundant 
+
+correlated <- c("temp_3pm", "pressure_3pm", "temp_9am")
+
+# add to ignore for modelling 
+
+(ignore %<>% union(correlated))
+
+```
+
+
+## Remove Variables
+
+Once we complete above steps, we remove all `variables` in ignore from the list `vars`
+
+```{r}
+# Check number of variables currently 
+
+length(vars)
+
+# Remove variables 
+
+vars %<>% setdiff(ignore) # set vars which are different from ignore 
+
+# Confirm the variables number
+
+length(vars)
+``` 
+
+
+# Algoritmic Feature Selection 
+
+We can apply some packages to reduce variables for modelling such `FSelector`
+
+
+# Missing Data
+
+Dealing with missing data is common in data wrangling. If there is any patterns of missing data, it's likely the systematic data issue.
+It's important to investigate to gain a better understanding of the data.
+
+
+```{r}
+# Check the dimesions to start with 
+
+dim(ds) %>% comcat() 
+
+# Identify observations with a missing target 
+
+missing_target <- ds %>% 
+  extract2(target) %>% # get the value of the target  
+  is.na() # check if they are NAs
+
+# Sum how many are found 
+
+sum(missing_target)
+
+# Remove observation with a missing target 
+
+ds %<>% filter(!missing_target)
+
+# Confirm the filter delivered the expected dataset 
+
+dim(ds)
+```
+
+# Feature Creation 
+
+## Derived Features
+
+Each observation is associated with a date. If we don't performace in a time series, it's better to consider other derived variables.
+Here, we consider `year` and `season`, and these should be considered only we've finished exploring the data. 
+
+
+```{r}
+ds %<>% 
+  mutate(year = lubridate::year(date),
+         season = as_factor(case_when(lubridate::month(date) %in% c(3,4,5) ~ "spring",
+                            lubridate::month(date) %in% c(6,7,8) ~ "summer",
+                            lubridate::month(date) %in% c(9,10,11) ~ "autumn",
+                            lubridate::month(date) %in% c(12,1,2) ~ "winter"
+         ))) %>% 
+  select(date, year, season, everything())
+
+vars %<>% c("season")
+id %<>%  c("year")
+```
+
+## Model Generated Features 
+
+A common method is to cluster observations or aggregate of them into groups. 
+A cluster analysis (called as segmentation) provides a simple mechanism to identify groups. 
+Then a group the locations will have similar values for the numeric variables and between the groups the numeric variables will be more dissimilar.
+A traditional clustering algorithm is `stats::kmean()`
+
+```{r}
+# The random number generator seed for repeatability
+
+set.seed(7465)
+
+# Cluster the numeric data per location 
+
+NCLUST <- 5 # set number of cluster
+
+mean_by_location <- ds %>% 
+  select(location, all_of(numc)) %>% 
+  group_by(location) %>% 
+  summarise_all(~mean(., na.rm = TRUE)) 
+
+locations <- mean_by_location$location
+
+cluster <- mean_by_location %>% 
+  select(-location) %>% 
+  replace(is.na(.), 0) %>% 
+  sapply(scale) %>% 
+  kmeans(NCLUST) %>% 
+  extract2("cluster")
+  # scale() %>% 
+  # kmeans(NCLUST)
+
+names(cluster) <- locations
+
+# Add the cluster to the dataset.
+
+ds %<>% mutate(cluster="area" %>%
+                 paste0(cluster[ds$location]) %>% as.factor)
+
+# Check clusters.
+ds %>% select(location, cluster) %>% sample_n(10)
+```
+
+Then we record the new variable in the model 
+```{r}
+vars %<>% c("cluster")
+```
+
+
+# Preparing the Metadata
+
+Metadata is data about the data. 
+
+```{r}
+# input of data
+inputs <- vars %>% 
+  setdiff(target)
+
+# Keep inputs in a single vector 
+
+(inputi <- inputs %>% 
+  sapply(function(x) which(x == names(ds)), USE.NAMES = FALSE))
+
+# record number of obs 
+nobs <- ds %>% 
+  nrow() %>% 
+  comcat()
+```
+
+Confirm subset sizes
+
+```{r}
+dim(ds) %>% comcat()
+
+dim(ds[vars]) %>% comcat()
+
+dim(ds[inputs]) %>% comcat()
+
+dim(ds[inputi]) %>% comcat()
+
+```
+
+# Numeric and Categoric Variables
+
+```{r}
+# identify the numeric 
+
+(numc <- ds %>%
+  select_if(is.numeric) %>% 
+  names() %>% 
+  intersect(inputs))
+
+# identify the factor  
+(catc <- ds %>% 
+  select_if(is.factor) %>% 
+  names() %>% 
+  intersect(inputs))
+```
+
+# Preparing for Model Building 
+
+A model will capture knowledge about the world that the data represents
+
+## Formula to Describe the Model 
+
+A *formula* is used to identify what we model from the data such as *target variable* from *input variables*.
+
+```{r}
+# formnula: first variable -> target 
+ds[vars] %>% 
+  formula()
+```
+
+The formula indicates that we build the model that capture the knowledge required to predict `rain_tomorrow` from provided inputs. This kind of model is called *classification*, where the target is a binary. 
+
+
+## Training, Validation And Testing Datasets
+
+Models are built using a machine learning algorithm which learns from the dataset of historic observations. A common methodology is to partition the data into a `training dataset` and a `testing dataset`. We also introduce a third dataset called the `validation dataset`. This is used during the building of the model to assist in tuning the algorithm through trialling different parameters to the machine learning algorithm. In this way we search for the best model using the validation dataset and then obtain a measure of the performance of the final model using the testing dataset.
+
+Randomly partition the dataset into 3 subsets. To reproduce the results then `set.seed()`
+
+```{r}
+# Initialise the random numbers for repeatable the results
+seed <- 42
+set.seed(seed)
+```
+
+70% random sample for building the model 
+
+```{r}
+# Train
+train <- ds %>% 
+  sample_frac(0.7)
+
+# Validate 
+validate <- ds %>% 
+  anti_join(train) %>%  # auto join with all similar column names
+  sample_frac(0.5)
+
+# test
+test <- ds %>% 
+  anti_join(train) %>% 
+  anti_join(validate) 
+
+```
+
+# Save the Dataset 
+```{r}
+# save data into appropriate folder
+
+fpath <- "~/Documents/Learn/R bootcamp/data/"
+
+# dsname
+dsname <- "weatherAUS"
+
+# timestamp for the dataset
+dsdate <- str_c("_",format(Sys.Date(),'%Y%m%d'))
+
+# Filename 
+dsfile <- str_c(dsname, dsdate, ".RData")
+
+# Fullpath 
+
+dsrdata <- fpath %>% 
+  file.path(dsfile)
+```
+
+# Packages 
+
+```{r}
+# Load packages 
+
+library(tidyverse) # dplyr, ggplot2, lubridate, stringr 
+library(rattle) # normVarNames(), weatherAUS
+library(scales) # commas in numbers
+library(RColorBrewer) # different colors
+library(gridExtra) # layout multiple plots
+library(GGally) # Parallel coordinates
+library(randomForest) # Deal with missing data
+
+```
+
+# Preparing the Dataset
+
+```{r}
+# Count the number of missing value 
+
+ds %>% 
+  select(all_of(vars)) %>% 
+  is.na() %>% 
+  sum() %>% 
+  comcat()
+
+```
+
+The performancing missing value inputation with `randomForest::na.roughfix()`
+
+```{r}
+# Impute missing data
+
+ds[vars] %<>% 
+  na.roughfix() # Na replaced by median (numeric), mode(factor)
+
+# Confirm missing data
+
+ds[vars] %>% 
+  is.na() %>% 
+  sum()
+
+```
+
+So we are now in the position to visualise the dataset.
+
+
+```{r}
+glimpse(ds)
+```
+
+
+# Scatter Plot
+
+```{r}
+seed <-  42
+set.seed(seed)
+
+ds %>%
+  sample_n(1000) %>% # avoid dense plots 
+  ggplot(aes(min_temp, max_temp, colour = rain_tomorrow)) + 
+  geom_point()
+```
+
+
+# Bar Chart
+
+```{r}
+ds %>% 
+  ggplot(aes(wind_dir_3pm)) +
+  geom_bar()
+```
+
+
+# Saving Plots to File
+
+```{r}
+ggsave("barchart.pdf")
+```
+
+
+# Adding spice to barchart
+
+Distribution of observation over a variable 
+
+```{r}
+# target is rain tomorrow 
+ds %>% 
+  ggplot(aes(wind_dir_3pm, fill = rain_tomorrow)) +
+  geom_bar()
+```
+
+Replicate the plots
+
+```{r}
+# go blue
+blues2 <- brewer.pal(4, "Paired")[1:2] %T>% print()
+
+# number locations 
+num_locations <- ds %>% summarise(n = n_distinct(location)) %>% .$n
+
+# replicate 
+
+ds %>% 
+  ggplot(aes(wind_dir_3pm, fill = rain_tomorrow)) +
+  geom_bar() + 
+  scale_fill_manual(values = blues2,
+                    labels = c("No Rain", "Rain")) +
+  scale_y_continuous(labels = comma) + 
+  theme(legend.position    = c(0.93, 0.85)
+        ,legend.title      = element_text(colour = "grey40")
+        ,legend.text       = element_text(colour = "grey40")
+        ,legend.background = element_rect(fill = "transparent")) +
+  labs(title = "Rain Expected by Wind Direction at 3pm",
+       subtitle = str_c("Observation from ", num_locations, " weather stations" ),
+       caption = "Source: Australian Bureau of Meteorology",
+       x = "Wind Direction 3pm",
+       y = "Number of Days",
+       fill = "Tomorrow")
+```
+
+# Alternative Bar Charts
+Let's have a look on variety of options to the barcharts
+
+```{r}
+(plot <- ds %>% 
+  ggplot(aes(x = location, y = temp_3pm, fill = location)) + 
+  geom_bar(stat = "summary", fun.y = mean) + 
+  theme(legend.position = "none"))
+```
+
+To make it easier to see, we rotate the x label
+```{r}
+plot + 
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+Also, we can flip the x axis to achieve the better visual 
+
+```{r}
+plot +
+  coord_flip()
+```
+
+# Box Plots
+
+```{r}
+ds %>% 
+  ggplot(aes(x = as_factor(year), y = max_temp, group = year, fill = as_factor(year))) + 
+  geom_boxplot(notch = TRUE) +
+  theme(legend.position = "none")
+```
+
+Violin plot is similar to box plot but show the distribution information. 
+
+```{r}
+ds %>% 
+  ggplot(aes(x = as_factor(year), y = max_temp, group = year, fill = as_factor(year))) + 
+  geom_violin() +
+  theme(legend.position = "none")
+```
+
+The amount of information can be increased by overlaying a boxplot. However this could result in information overload 
+
+```{r}
+ds %>% 
+  ggplot(aes(x = as_factor(year), y = max_temp, group = year, fill = as_factor(year))) + 
+  geom_violin() + 
+  geom_boxplot(width = .5, position = position_dodge(width = 0)) + 
+  theme(legend.position = "none")
+```
+
+We can also split the plot across the locations with `facet_wrap()`
+
+```{r}
+ds %>% 
+  ggplot(aes(x = as_factor(year), y = max_temp, group = year, fill = as_factor(year))) + 
+  geom_violin() + 
+  geom_boxplot(width = .5, position = position_dodge(width = 0)) + 
+  theme(legend.position = "none") +
+  facet_wrap(~location, ncol = 5)
+```
+
+

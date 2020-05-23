@@ -1,0 +1,276 @@
+---
+title: "Tidy Data with tidyr"
+author: "thinh"
+date: '2020-04-05'
+cover: ''
+comments: no
+imgs: []
+justify: no
+lastmod: '2020-04-05T20:18:57+07:00'
+license: ''
+readingTime: yes
+single: no
+slug: tidy-data-with-tidyr
+categories:
+  - rfds
+tags:
+  - R
+output: 
+  html_document: 
+    theme: cosmo
+    toc: yes
+---
+
+# What is a tidy data 
+**3 rules**:
+
+- each variable has its own column
+- each observation has its own row
+- each value has its own cell
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+# this is a tidy data
+table1
+```
+
+```{r}
+# this isn't a tidy data
+table2
+```
+
+# Deal with untidy data with spread() and gather()
+**Problems**:
+
+- 1 variable might spread across multiple columns
+- 1 observation might be scatterred across multiple rows
+
+## Gathering
+Some column names are not name of variables but *value* of the variable 
+
+```{r}
+# 1999 and 2000 are values of year variable
+table4a # cases
+table4b # population 
+```
+
+So we need to gather these columns into a new variable. The process is followed
+
+- set of columns that represent values
+- name of variable to form the column name, `key`, in the case `year`
+- name of variable to gather, `value`, in the case `case`
+
+```{r}
+table4a <- table4a %>% 
+  gather('1999', '2000', key = 'year', value = 'cases')
+table4a
+```
+
+```{r}
+table4b <- table4b %>% 
+  gather("1999", "2000", key = "year", value = "population")
+table4b 
+```
+
+Join these tables to achieve `table1`
+
+```{r}
+left_join(table4a, table4b)
+```
+
+
+## Spreading
+An observation is scatterred across multiple rows. 
+
+```{r}
+table2
+```
+
+In this table, the observation is a country in year but each spreads two rows. The process to tidy up:
+
+- The column that contains variable names, the `key` column. Here is `type`
+- The column that contains values forms multiple columns, the `value` column. Here is `count`
+
+```{r}
+table2 %>% 
+  spread(key = type, value = count)
+```
+
+In summary, `gather()` makes table narrower and longer where as `spread()` makes table wider and shorter.
+
+# Separating and Pull
+## separate()
+```{r}
+# rate make this table untidy
+table3
+```
+
+Separate rate into `case` and `population`
+
+```{r}
+table3 %>% 
+  separate(rate, into = c("case", "population"))
+```
+
+By default, `separate()` will split values whenever it sees a non-alphanumeric character. We can specify the split then 
+
+```{r}
+# add sep = 
+table3 %>% 
+  separate(rate, into = c("case", "population"), sep = "/")
+```
+
+However, this still needs to improves as `case` and `population` are in character type. They shoud be `int`
+
+```{r}
+table3 %>% 
+  separate(rate , 
+           into = c("rate", "population"),
+           convert = TRUE)
+```
+
+## unite()
+- inverse of `separate()`
+```{r}
+table5
+```
+
+**Problem**: century and year can be united to form as year (make more sense)
+
+```{r}
+table5 %>% 
+  unite(new, century, year)
+```
+Still require improvement with `underscore _` (by default `sep = _`)
+
+```{r}
+table5 %>% 
+  unite(new, century, year, sep = "")
+```
+
+# Missing Values
+A value can be missing in one of two possible ways:
+
+- *explicitly*: flagged with NA
+- *implicitly*: not present in the data
+
+```{r}
+stocks <- tibble(
+  year = c(rep(2015,4), rep(2016,3)),
+  qtr = c(seq(1,4), seq(2,4)),
+  return = c(1.88, 0.59, 0.35, NA, 0.92, 0.17, 2.66)
+)
+stocks
+```
+So, explicit is value of return in 2015, quarter 4. Implicit is the observation of year 2016, quarter 4.
+
+One approach to make the implicit missing to explicit is to put years into columns 
+
+```{r}
+stocks %>% 
+  spread(year, return)
+```
+
+Another way is to use `complete()`
+
+```{r}
+stocks %>% 
+  complete(year, qtr) # fill missing with NA by distinct all combinations
+```
+
+Another method is to fill() with the last observation carried forward
+```{r}
+treatment <- tribble(
+  ~ person, ~ treatment, ~response, 
+  "Derrick Whitmore", 1, 7, 
+  NA, 2, 10,
+  NA, 3, 9, "Katherine Burke", 1, 4 
+  )
+treatment
+```
+
+```{r}
+treatment %>% 
+  fill(person)
+```
+
+# Case study 
+Bring everything we learn together 
+
+```{r}
+tidyr::who
+```
+
+- Firstly, `iso2`, `iso3` are redundant because they convey the same thing with `country`
+- Given the structure of columns, `new_sp_`, these are values of the variables, not the names of them.
+
+```{r}
+who1 <- who %>% 
+  gather(
+    new_sp_m014:newrel_f65,
+    key = "key",
+    value = "cases",
+    na.rm = TRUE
+  )
+who1
+```
+
+We can guess some hints of the structure of the data by counting them 
+
+```{r}
+who1 %>% 
+  count(key)
+```
+
+Make variable names consistent 
+```{r}
+who2 <- who1 %>% 
+  mutate(key = stringr::str_replace(key, "newrel", "new_rel"))
+who2
+```
+
+Then we separate the value in each code (key)
+
+```{r}
+who3 <- who2 %>% 
+  separate(key, c("new", "type", "sexage"), sep = "_")
+who3
+```
+
+Zoom in 
+```{r}
+who3 %>% 
+  count(new)
+```
+
+So all is new, then drop this redundant variable, together with `iso2`, `iso3`
+
+```{r}
+who4 <- who3 %>% 
+  select(-c(iso2, iso3, new))
+```
+
+Next, separate `sexage` by the first character ( in this case `a`)
+
+```{r}
+who5 <- who4 %>% 
+  separate(sexage, c("sex", "age"), sep = 1)
+
+who5
+```
+
+In the end we only need to do all once 
+
+```{r}
+who %>% 
+  gather(code, cases, new_sp_m014:newrel_f65, na.rm = TRUE) %>% 
+  mutate(
+    code = stringr::str_replace(code, "newrel", "new_rel")) %>% 
+  separate(code, c("new", "type", "sexage")) %>% 
+  select(-c(iso2, iso3, new)) %>% 
+  separate(sexage, c("sex", "age"), sep = 1)
+```
+

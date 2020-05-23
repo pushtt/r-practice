@@ -1,0 +1,306 @@
+---
+title: Modelling Building
+author: thinh
+date: '2020-05-07'
+slug: modelling-building
+categories:
+  - rfds
+tags:
+  - Book
+comments: no
+cover: ''
+imgs: []
+justify: no
+lastmod: '2020-05-07T23:05:25+07:00'
+license: ''
+readingTime: yes
+single: no
+toc: yes
+editor_options: 
+  chunk_output_type: console
+---
+Prerequisite
+
+```{r}
+library(tidyverse)
+library(modelr)
+library(lubridate)
+options(na.action = na.warn)
+theme_set(theme_light())
+
+```
+
+```{r}
+library(nycflights13)
+```
+
+# How are low-quality diamonds more expensive? 
+
+```{r}
+diamonds %>% 
+  mutate(cut = fct_reorder(cut, price)) %>% 
+  ggplot(aes(cut, price)) + 
+  geom_boxplot() + 
+  ggtitle(label = "",
+          subtitle = "The worst cut is Fair")
+```
+
+```{r}
+diamonds %>%
+  mutate(color = fct_reorder(color, price)) %>% 
+  ggplot(aes(color, price)) + 
+  geom_boxplot() + 
+  ggtitle(label = "",
+          subtitle = "The worst colour is J (slightly yellow)")
+```
+
+```{r}
+diamonds %>% 
+  mutate(clarity = fct_reorder(clarity, price)) %>% 
+  ggplot(aes(clarity, price)) + 
+  geom_boxplot() + 
+  ggtitle(label = "",
+          subtitle = "The worst clarity is I1 (inclusions visible to the naked eye)")
+```
+
+# Price and carat
+
+```{r}
+diamonds2 <- diamonds %>% 
+  filter(carat <= 2.5) %>% 
+  mutate(lcarat = log2(carat),
+         lprice = log2(price)) 
+diamonds2 %>% 
+  ggplot(aes(lcarat, lprice)) + 
+  geom_hex(bins = 50)
+```
+
+Look fairly linear 
+
+```{r}
+mod_diamonds <- lm(lprice ~ lcarat, data = diamonds2)
+
+grid <- diamonds2 %>%
+  data_grid(carat = seq_range(carat, 20)) %>% 
+  mutate(lcarat = log2(carat)) %>%    
+  add_predictions(mod_diamonds, "lprice") %>% 
+  mutate(price = 2 ^ lprice)
+
+diamonds2 %>% 
+  ggplot(aes(carat, price)) +
+  geom_hex(bins = 50) + 
+  geom_line(data = grid, colour = "red", size = 1) + 
+  scale_y_continuous(labels = scales::dollar_format()) +
+  labs(
+    x = "Size of diamonds (Carat)",
+    y = "Price"
+  ) 
+
+```
+
+The pattern suggests the larger the carat, the cheaper the price is as there are no diamonds beyond 19K.
+Let's verify there is any patterns in the resid plots 
+
+```{r}
+diamonds2 %>% 
+  add_residuals(mod_diamonds, "lresid") %>% 
+  ggplot(aes(lcarat, lresid)) + 
+  geom_hex(bins = 50)
+```
+
+
+### A more complicated model 
+
+```{r muptiple linear regression}
+mod_diamonds2 <- lm(lprice ~ lcarat+ color + cut + clarity, data = diamonds2)
+summary(mod_diamonds2)
+```
+
+```{r}
+grid <- diamonds2 %>% 
+  data_grid(cut, .model = mod_diamonds2) %>% 
+  add_predictions(mod_diamonds2)
+
+grid %>% 
+  ggplot(aes(cut, pred)) +
+  geom_point() 
+```
+
+
+
+```{r}
+diamonds2 <- diamonds2 %>% 
+  add_residuals(mod_diamonds2, "lresid2") 
+
+diamonds2 %>%
+  ggplot(aes(lcarat, lresid2)) +
+  geom_hex(bins = 50)
+
+```
+
+
+### What effects the number of flights? 
+
+```{r}
+daily <- flights %>%
+  mutate(date = make_date(year, month, day)) %>% 
+  count(date) 
+
+daily %>% 
+  ggplot(aes(date, n)) + 
+  geom_line()
+```
+
+Very strong day of week
+
+```{r}
+daily <- daily %>% 
+  mutate(week = wday(date, label = TRUE, week_start = 1)) 
+
+daily %>% 
+  ggplot(aes(week, n, fill = week)) + 
+  geom_boxplot() + 
+  labs(
+    x = "Day of week", 
+    y = "Number of flights",
+    title = "The number of flights in 2013", 
+    subtitle = "Week start is Monday"
+  ) 
+```
+
+There are few flights indeed on weekends. One way to remove this strong pattern is to use a model. 
+
+First, display predictions to overlaid the original data 
+```{r}
+mod <- lm(n ~ week, data = daily) 
+summary(mod)
+
+# Add prediction 
+
+grid <- daily %>% 
+  data_grid(week) %>% 
+  add_predictions(mod, "n")
+
+daily %>% 
+  ggplot(aes(week, n, fill = week)) + 
+  geom_boxplot() + 
+  labs(
+    x = "Day of week", 
+    y = "Number of flights",
+    title = "The number of flights in 2013", 
+    subtitle = "Week start is Monday"
+  ) +
+  geom_point(data = grid, colour = "red", size = 4)
+```
+
+Second, visualise the resid
+
+```{r}
+daily <- daily %>% 
+  add_residuals(mod) 
+
+daily %>% 
+  filter(resid < -100)
+
+daily %>% 
+  ggplot(aes(date, resid)) + 
+  geom_ref_line(h = 0, colour = "red") +
+  geom_line(aes(colour = week)) + 
+  geom_smooth(se = FALSE, span = 0.2)
+```
+
+* Our model fails in June
+* As well, sunday and saturday seems to be failed to capture in the model 
+* Some days are far from expected 
+
+What we are drawn from the model:
+* fewer the flights in Jan, Feb
+* more flights in summer 
+* use the domain of knowledge to brainstorm more 
+
+
+### Seasonal Saturday Effect
+
+```{r}
+daily %>% 
+  filter(week == "Sat") %>% 
+  ggplot(aes(date, n )) + 
+  geom_line() + 
+  geom_point() +
+  scale_x_date(
+    date_breaks = "1 month", 
+    date_labels = "%b"
+  )
+```
+
+Build a function to arrange dates in seasons
+
+```{r}
+term <- function(date) {
+  cut(date,
+      breaks = ymd(20130101, 20130605, 20130825, 20140101),
+      labels = c("spring", "summer", "fall")
+  )
+}
+
+daily <- daily %>% 
+  mutate(term = term(date))
+
+# replot 
+
+daily %>% 
+  filter(week == "Sat") %>% 
+  ggplot(aes(date, n, colour = term)) + 
+  geom_line() + 
+  geom_point(alpha = 1/3) +
+  scale_x_date(
+    date_breaks = "1 month", 
+    date_labels = "%b"
+  ) + 
+  labs(
+    x = "Month of Year",
+    y = "Number of flights",
+    colour = "Seasons"
+  ) 
+```
+
+
+Let's look at day of week 
+
+```{r}
+daily %>% 
+  ggplot(aes(week, n, fill = term )) + 
+  geom_boxplot()
+```
+
+It seems that there is a significant variations across the terms. We might include the terms to improve the model. Let's compare the first 
+
+```{r}
+mod1 <- lm(n ~ week, data = daily)
+mod2 <- lm(n ~ week*term, data = daily)
+```
+
+```{r}
+daily %>% 
+  gather_residuals(without = mod1, with = mod2) %>% 
+  ggplot(aes(date, resid, color = model)) + 
+  geom_line()
+```
+
+Let's look the performance of model by overlaying the predictions onto the raw data
+
+```{r}
+grid <- daily %>% 
+  data_grid(week, term) %>% 
+  add_predictions(mod2, "n")
+
+daily %>% 
+  ggplot(aes(week, n, colour = term)) + 
+  geom_boxplot() + 
+  geom_point(data = grid, colour = "red") + 
+  facet_wrap(~ term)
+```
+
+It shows clearly that we fail to capture the data in Fall as the actual data is far from from what the model suggested 
+
+

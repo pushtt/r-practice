@@ -1,0 +1,95 @@
+---
+title: ggplot2
+author: Thinh
+date: '2020-03-28'
+slug: ggplot2
+categories: ['bootcamp']
+tags:
+  - R
+backtotop: yes
+---
+# Data.frame
+- columns = variables
+- rows = observations 
+- cells = values
+
+```{r}
+# prepare data to replicate the R bootcamp environment in https://r-bootcamp.netlify.com/chapter1
+library(gapminder)
+library(tidyverse)
+gap1992 <- gapminder %>% filter(year == 1992)
+```
+
+Let's start to summary the data 
+```{r}
+head(gap1992)
+```
+```{r}
+colnames(gap1992)
+nrow(gap1992)
+
+```
+
+# Mapping variables to produce geometric plots
+A graph consists:
+
+- A `mapping` of variables in `data` to
+- `aes()`thetic attributes of
+- `geom_`etric objects.
+Translated as
+
+```{r}
+ggplot(data = gap1992,
+       mapping = aes(
+         x = log(gdpPercap), 
+         y = lifeExp,
+         color = continent
+         )) + 
+  geom_point()
+```
+
+**List of aesthetics:**
+
+- x
+- y
+- size
+- shape
+- color
+- alpha
+
+The great thing about `ggplot2` is that it is easy to swap the presentations.
+
+```{r}
+ggplot(data = gap1992,
+       mapping = aes(
+         x = log(gdpPercap),
+         y = lifeExp,
+         color = continent
+       )) +
+  geom_line()
+```
+
+The nice thing though is `geoms` are layers on a ggplot. Apply both `geom_point` and `geom_line` at the same time
+```{r}
+ggplot(data = gap1992,
+       mapping = aes(
+         x = log(gdpPercap),
+         y = lifeExp,
+         color = continent
+       )) +
+  geom_point() + 
+  geom_line()
+```
+
+Now complete the full plot as show in the bootcmap 
+```{r}
+ggplot(data = gap1992,
+       mapping = aes(
+         x = log(gdpPercap),
+         y = lifeExp,
+         color = continent,
+         size = pop
+       )) + 
+  geom_point() +
+  ggtitle("Gapminder for 1992")
+```

@@ -1,0 +1,134 @@
+---
+title: "Voters"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+voters <- read_csv("data/voters.csv") %>% 
+  mutate(turnout16_2016 = factor(turnout16_2016)) %>% 
+  select(-case_identifier)
+
+glimpse(voters)
+```
+
+```{r}
+voters %>% 
+  count(turnout16_2016)
+
+voters %>% 
+  group_by(turnout16_2016) %>% 
+  summarise(elections_dont_matter = mean(RIGGED_SYSTEM_1_2016 <=2),
+            economy_is_getting_better = mean(econtrend_2016 == 1),
+            crime_is_very_important = mean(imiss_a_2016 ==2))
+```
+
+
+```{r}
+voters %>% 
+  ggplot(aes(econtrend_2016, ..density.., fill = turnout16_2016)) +
+  geom_histogram(position = "identity", alpha = .5, binwidth = 1)
+```
+
+
+### Fit a simple model 
+
+```{r}
+simple_glm <- voters %>% 
+  glm(turnout16_2016 ~ ., data = ., family = "binomial")
+
+summary(simple_glm)
+```
+
+
+# Training and testing data 
+
+```{r}
+library(rsample)
+
+set.seed(1234)
+vote_split <- voters %>% 
+  initial_split(p = 0.8, strata = "turnout16_2016")
+
+vote_train <- training(vote_split)
+vote_test <- testing(vote_split)
+```
+
+
+## Upsampling for imbalance data 
+
+```{r}
+vote_glm <- train(turnout16_2016 ~ .,
+                  method = "glm",
+                  family = "binomial",
+                  data = vote_train,
+                  trControl = trainControl(method = "none",
+                                           sampling = "up")
+                  )
+```
+
+
+# Cross-validation 
+
+```{r}
+# logistic regression 
+
+vote_glm <- train(turnout16_2016 ~ .,
+                  method = "glm", family = "binomial",
+                  data = vote_train,
+                  trControl = trainControl(method = "repeatedcv",
+                                           repeats = 2,
+                                           sampling = "up"))
+```
+
+
+```{r}
+# random forerest 
+vote_rf <- train(turnout16_2016 ~ .,
+                  method = "rf",
+                  data = vote_train,
+                  trControl = trainControl(method = "repeatedcv",
+                                           repeats = 2,
+                                           sampling = "up"))
+
+```
+
+
+## Model performance 
+
+### Confusion matrix
+```{r}
+library(yardstick)
+# confusion matrix
+vote_train %>% 
+  mutate(logistic_regression = predict(vote_glm, vote_train)) %>% 
+  conf_mat(truth = turnout16_2016, estimate = logistic_regression)
+
+vote_train %>% 
+  mutate(random_forrest = predict(vote_rf, vote_train)) %>% 
+  conf_mat(truth = turnout16_2016, estimate = random_forrest)
+```
+
+
+### Accuracy
+
+```{r}
+vote_test %>% 
+  mutate(logistic_regression = predict(vote_glm, vote_test)) %>% 
+  conf_mat(truth = turnout16_2016, estimate = logistic_regression)
+
+vote_test %>% 
+  mutate(random_forrest = predict(vote_rf, vote_test)) %>% 
+  conf_mat(truth = turnout16_2016, estimate = random_forrest)
+```
+

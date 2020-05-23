@@ -1,0 +1,226 @@
+---
+title: Strings with stringr
+author: thinh
+date: '2020-04-07'
+slug: strings-with-stringr
+categories:
+  - rfds
+tags:
+  - R
+comments: no
+cover: ''
+imgs: []
+justify: no
+lastmod: '2020-04-07T22:20:48+07:00'
+license: ''
+readingTime: yes
+single: no
+---
+
+# Prerequisites
+```{r}
+library(tidyverse)
+library(stringr)
+```
+
+## String basics 
+Create a string can be done with double quotes or single quote
+
+```{r}
+string1 <- "thinh"
+string2 <- "thinh's code"
+```
+
+Escape special characters with backslash
+
+```{r}
+(double_quote <- "\"" )# or '"'
+```
+```{r}
+(single_quote <- '\'' ) # or "'"
+```
+
+## String Length 
+```{r}
+str_length(c("a", "thinh tran", NA))
+```
+
+## Combining Strings 
+
+**combine**
+
+```{r}
+str_c("x", "y" ) # can add sep =
+```
+
+**collapse**
+
+```{r}
+str_c(c("x","y"), collapse = ",")
+```
+
+## Subsetting Strings
+Extract part of strings `str_sub()`
+
+```{r}
+x <- c("Apple", "Banana", "Orange")
+str_sub(x, 1, 3)
+```
+
+```{r}
+x <- c("Apple", "Banana", "Orange")
+str_sub(x, -3, -1)
+```
+
+
+```{r}
+str_sub(x, 1, 1) <- str_to_lower(str_sub(x, 1, 1))
+x
+```
+
+
+# Matching Pattern With Regular Expression 
+## Basic Matches 
+Simple
+
+```{r}
+x <- c("banana", "apple", "pear")
+str_view(x, "an")
+```
+
+Match any characters except a new line with `.`
+
+```{r}
+str_view(x, ".a.")
+```
+
+```{r}
+str_view(c("abc", "a.c", "bef"), "a\\.c")
+```
+
+
+## Anchors
+*Anchor* the regular expression so that it matches from the start or end of the string. 
+
+- `^` to match the start of string 
+- `$` to match the end of string 
+
+```{r}
+x <- c("apple", "banana", "pear")
+str_view(x, "^a")
+```
+
+```{r}
+str_view(x, "r$")
+```
+
+## Character Classes And Alternatives
+- `\d` matches any digits
+- `\s` matches any whitespaces
+- `[abc]` matches any a,b or c
+- `[^abc]` matches any except a,b or c
+
+Alternation for expression
+
+```{r}
+str_view(c("thinh", "thịnh" ), "th(i|ị)nh")
+```
+
+## Repetition 
+How many times pattern match 
+- `?`: 0 or 1
+- `+`: 1 or more
+- `*`: 0 or more
+
+```{r}
+x <- "1888 is the longest year in Roman numerals: MDCCCLXXXVIII" 
+str_view(x, "CC?") # 0 or 1 CC 
+``` 
+
+```{r}
+str_view(x, "CC+") # 1 or more (greedy map)
+```
+
+```{r}
+str_view(x, "C[LX]+") # CLX or CL or CX --> 1 or more X or L 
+```
+
+Can also use number of matches 
+- `{n}` exactly n 
+- `{n, }` n or more
+- `{, m}` at most m
+- `{n, m}` between n and m
+
+```{r}
+str_view(x, "C{2}")
+```
+
+```{r}
+str_view(x, "C{2,}") # greedy match
+```
+
+```{r}
+str_view(x, "C{2,}?") # lazy match
+```
+
+## Grouping and Backreferences 
+```{r}
+str_view(fruit, "(..)\\1", match = TRUE) # match any 2-character length repeated once
+```
+
+## Tools 
+ - Determine which strings match a pattern.
+ - Find the positions of matches.
+ - Extract the content of matches.
+ - Replace matches with new values.
+ - Split a string based on a match.
+ 
+### Detect Matches 
+use `str_detect()`
+```{r}
+x <- c("apple", "banana", "pear")
+str_detect(x, "an")
+```
+
+```{r}
+# how many common words start with t
+sum(str_detect(words, "^t"))
+```
+
+```{r}
+# match a pattern
+words[str_detect(words, "x$")]
+```
+Or we can use
+```{r}
+str_subset(words, "x$")
+```
+
+How many matches are in the string? 
+
+```{r}
+str_count(x, "a")
+```
+
+## Extract Matches
+```{r}
+stringr::sentences %>% head(10)
+```
+
+*Question:* How many sentences containing a colour?
+
+```{r}
+colours <- c("red", "orange", "yellow", "green", "blue", "purple")
+colour_match <- str_c(colours, collapse = "|")
+```
+
+```{r}
+has_colour <- str_subset(sentences, colour_match)
+(matches <- str_extract(has_colour, colour_match))
+```
+
+```{r}
+more <- sentences[str_count(sentences, colour_match) > 1]
+str_view_all(more, colour_match)
+```
+

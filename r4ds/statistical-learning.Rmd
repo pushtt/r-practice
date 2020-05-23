@@ -1,0 +1,46 @@
+---
+title: Statistical Learning
+author: thinh
+date: '2020-04-30'
+slug: statistical-learning
+categories:
+  - ISLR
+tags:
+  - Book
+comments: no
+cover: ''
+imgs: []
+justify: no
+lastmod: '2020-04-30T15:55:23+07:00'
+license: ''
+readingTime: yes
+single: no
+toc: yes
+---
+
+# Business Case
+
+What we have: 
+
+- **Requirement**: Improve sales of a particular product. 
+- **Data**: Advertising data - sales in 200 different markets, along with advertising budgets in those markets for 3 channels: TV, radio, newspaper
+- **Question**: can not directly increase sales -> indirectly through the advertising expenditure if proving a association between advertising and sales 
+
+Setting up the model:
+
+- *input* : advertising budgets. Input is also known as preditors, independent variables, features, variables
+- *output*: sales. Output is also known as response, dependent variables
+- Denote input as X where
+    - X1: TV budgets 
+    - X2: radio budgets
+    - X3: newspaper budgets 
+- Denote output as Y 
+
+Generally, \(Y\ =\ f\left(X\right)\ +\ epislon\). Statistical learning refers to a set of approaches for estimating \(f\)
+    
+## Why estimate \(f\)
+- prediction \(^{G}\)
+- reference
+
+
+

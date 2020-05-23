@@ -1,0 +1,226 @@
+---
+title: Relational Data With dplyr
+author: thinh
+date: '2020-04-06'
+slug: relational-data-with-dplyr
+categories:
+  - rfds
+tags:
+  - R
+comments: no
+cover: ''
+imgs: []
+justify: no
+license: ''
+readingTime: yes
+single: no
+---
+# Introduction 
+Three families of verbs to work with relational data:
+
+- *Mutating Join*
+- *Filtering Join*
+- *Set Operation*
+
+Most common relational data is in a RDBMS. SQL is used to manipulate these system. `dplyr` does the same thing but easier 
+ 
+# Prerequisites
+
+```{r}
+library(tidyverse)
+```
+
+
+# nycflights 
+```{r}
+library(nycflights13)
+```
+
+Contain 4 tibbles which are related to `flights`: `airlines`, `airports`, `planes`, `weather`
+For nycflights13:
+
+• `flights` connects to `planes` via a single variable, tailnum.
+• `flights` connects to `airlines` through the carrier variable.
+• `flights` connects to `airports` in two ways: via the origin and dest variables.
+• `flights` connects to `weather` via origin (the location), and year, month, day, and hour (the time).
+ 
+```{r}
+head(airlines,10)
+```
+
+```{r}
+head(airports,10)
+```
+
+```{r}
+head(planes,10)
+```
+
+```{r}
+head(weather)
+```
+
+# Keys
+- Variables to connect each pair of tables --> called *keys*.
+- May require one or more variables to connect each pair of tables. 
+- Two type of *keys*:
+  - *primary key*: uniquely identifies an observation in **its own table**. `planes$tailnum` in this case
+  - *foregin key*: uniquely identifies an observation **in another table**. `flights$tailnum` in this case
+- It's good practice to verify if indeed identify unique observation or not 
+
+```{r}
+planes %>% 
+  count(tailnum) %>% 
+  filter(n > 1) # not a unique observation
+```
+
+Sometimes, a table doesn't have a explicit primary key such as `flights`
+
+```{r}
+flights %>% 
+  count(year, month, day, flight) %>% 
+  filter(n > 1)
+```
+
+If a table lacks a primary key, it’s sometimes useful to add one with `mutate()` and `row_number()`. That makes it easier to match observations if you’ve done some filtering and want to check back in with the original data. This is called a *surrogate key*.
+
+
+# Mutating Joins 
+- Matches observations by their keys, then copies across variables from one table to the other.
+- To make it visible, narrow down the table first 
+```{r}
+flights2 <- flights %>% 
+  select(year:day, hour, origin, dest, tailnum, carrier)
+
+flights2
+```
+
+- want to add full name of the airline then 
+
+```{r}
+flights2 %>% 
+  select(-c(origin, dest)) %>% 
+  left_join(airlines, by = "carrier")
+```
+
+# Understanding joins 
+
+```{r}
+x <- tribble( 
+  ~key, ~val_x, 
+  1, "x1", 
+  2, "x2",
+  3, "x3" 
+  )
+
+y <- tribble(
+  ~key, ~val_y,
+  1, "y1",
+  2, "y2",
+  4, "y3"
+)
+```
+
+
+## Inner Join
+Matches pairs of observations whenever their keys are equal
+
+```{r}
+x %>% 
+  inner_join(y, by = "key")
+```
+
+## Outer Join 
+Keeps observations that appear in at least one of the tables. 
+There are three types of outer joins:
+
+- *left join* : keep all observation in x 
+- *right join*: keep all observation in y
+- *full join*: keep all observation in x and y
+
+## Defining the Key Columns
+- The default, `by = NULL`, use all variables that are appear in both tables, *natural join*
+- `by = "x"` use only some common variables 
+- `by = c("a" = "b")` match `variable a` in `table x` with `variable b` in `table y`. For example 
+
+```{r}
+flights2 %>% 
+  left_join(airports, c("dest" = "faa")) # map destination
+```
+
+```{r}
+flights2 %>% 
+  left_join(airports, c("origin" = "faa"))
+```
+
+
+# Filtering Joins
+Match observations in the same way as mutating joins, but affect the observations, not the variables. There are two types
+
+- *semi_join(x, y)* keeps all observation in x that have a match in y
+- *anti_join(x,y)* drop all observation in x that a match in y
+For examples,
+```{r}
+top_dest <- flights %>% 
+  count(dest, sort = TRUE) %>% 
+  head(10)
+top_dest
+```
+
+We want to find which flight that went to one of these destinations
+
+```{r}
+flights %>% 
+  filter(dest %in% top_dest$dest)
+```
+
+It's difficult when we have multille variables in the filter. To save our time, we can apply `semi_join`
+
+```{r}
+flights %>% 
+  semi_join(top_dest, by = "dest")
+
+```
+
+Inverse of a `semi_join` is `anti_join`. How many flights that don't have a match with `planes`
+
+```{r}
+flights %>% 
+  anti_join(planes, by = "tailnum") %>% 
+  count(tailnum, sort = TRUE)
+```
+
+# Set Operation 
+- `intersect(x, y)` return only variables in both x, y
+- `union(x, y)` return unique observation in x and y 
+- `setdiff(x, y)` return observation in x but not in y 
+
+Simple data
+```{r}
+df1 <- tibble(
+  x = 1:2,
+  y = c(1,1)
+)
+
+df2 <- tribble(
+  ~x, ~y, 
+  1, 1,
+  1, 2
+)
+```
+
+```{r}
+# intersect
+intersect(df1, df2)
+```
+
+```{r}
+# union 
+union(df1, df2)
+```
+
+```{r}
+# setdiff
+setdiff(df1, df2)
+```
+

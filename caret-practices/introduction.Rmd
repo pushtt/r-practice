@@ -1,0 +1,133 @@
+---
+title: "Introdction"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+theme_set(theme_light())
+```
+
+### Get a quick look on the distribution and the target
+```{r}
+cars2018 <- read_csv("data/cars2018.csv") %>% 
+    janitor::clean_names()
+
+# print
+glimpse(cars2018)
+
+
+# plot histogram
+cars2018 %>% 
+  ggplot(aes(mpg)) + 
+  geom_histogram(bins = 25) +
+  labs(
+    x = "Fuel efficiency (mpg)",
+    y = "Number of cars"
+  )
+```
+
+
+### Building a simple model 
+
+```{r}
+# remove redundant as identificaiton only 
+car_vars <- cars2018 %>% 
+  select(-starts_with("model")) 
+
+# fit a linear 
+
+fill_all <- lm(mpg ~ ., data = car_vars)
+
+library(broom)
+
+tidy(fill_all)
+```
+
+## Training and Testing data
+
+```{r}
+library(rsample)
+set.seed(1234)
+car_split <- car_vars %>% 
+  initial_split(prop = 0.8, strata = transmission)
+
+car_train <- training(car_split)
+car_test <- testing(car_split)
+```
+
+### Linear regression
+```{r}
+
+fit_lm <- train(log(mpg) ~ .,
+                method = "lm",
+                data = car_train,
+                trControl = trainControl(method = "none"))
+fit_lm
+```
+
+### Decision Tree
+
+```{r}
+fit_rf <- train(log(mpg) ~ .,
+                method = "rf",
+                data = car_train,
+                trControl = trainControl(method = "none"))
+
+fit_rf
+```
+
+### Evaluating models 
+
+```{r}
+library(yardstick)
+
+results <- car_test %>% 
+  mutate(mpg = log(mpg),
+         linear_regressison = predict(fit_lm, car_test),
+         random_forrest = predict(fit_rf, car_test))
+
+metrics(results, truth = mpg, estimate = linear_regressison)
+metrics(results, truth = mpg, estimate = random_forrest)
+```
+
+### Bootstrap
+
+```{r}
+cars_lm_bt <- train(log(mpg) ~ ., 
+                    method = "lm", 
+                    data = car_train,
+                    trControl = trainControl(method = "boot"))
+
+cars_rf_bt <- train(log(mpg) ~ ., 
+                    method = "rf", 
+                    data = car_train,
+                    trControl = trainControl(method = "boot"))
+
+cars_lm_bt
+cars_rf_bt
+```
+
+```{r}
+results <- car_test %>% 
+  mutate(mpg = log(mpg),
+         linear_regression = predict(cars_lm_bt, car_test),
+         random_forrest = predict(cars_rf_bt, car_test))
+
+results %>% 
+  pivot_longer(cols = c(linear_regression, random_forrest), 
+               names_to = "method", values_to = "value") %>% 
+  ggplot(aes(mpg, value, colour = method)) + 
+  geom_point(size = 1.5, alpha = 0.5) + 
+  geom_smooth(method = "lm") + 
+  geom_abline(lty = 2, colour = "gray50") + 
+  facet_grid(~ method)
+```
+

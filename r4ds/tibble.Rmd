@@ -1,0 +1,98 @@
+---
+title: Tibble
+author: thinh
+date: '2020-04-05'
+slug: tibble
+categories:
+  - rfds
+tags:
+  - R
+comments: no
+cover: ''
+imgs: []
+justify: no
+lastmod: '2020-04-05T16:12:04+07:00'
+license: ''
+readingTime: yes
+single: no
+toc: yes
+---
+
+# Introduction 
+Tibble is a data.frame but slightly twisted to work well in `tidyverse`
+
+# Prerequistites
+
+```{r}
+library(tidyverse)
+```
+# Creating tibbles
+
+```{r}
+# convert to tibble
+as_tibble(iris)
+```
+
+```{r}
+# create a tibble from vectors
+tibble(
+  x = 1:5,
+  y = 1,
+  z = x + y
+)
+```
+
+```{r}
+# create a tibble with tribble()
+tribble(
+  ~x, ~y,~z,
+  "a", 1, 2,
+  "b", 2,1
+)
+```
+
+# Tibble vs Data Frame 
+- subsetting and printing 
+
+**Tibble** 
+```{r}
+# printing 
+nycflights13::flights %>% 
+  print(n = 10, width = Inf)
+```
+
+
+```{r}
+# Subsetting
+df <- tibble(
+  x = 1:5,
+  y = 1,
+  z = x + y
+)
+## extract value 
+df$x  # result as a tibble
+# or 
+df[["x"]]
+# or 
+df[[1]]
+# or
+df %>% .$x
+
+```
+
+
+ **Data Frame**
+ 
+```{r}
+df1 <- data.frame(x = 1:5,
+                  y = 1,
+                  z = 3 )
+
+# Extract value
+df1$x 
+df[, "x"] # result is a vector 
+
+
+```
+ 
+ 

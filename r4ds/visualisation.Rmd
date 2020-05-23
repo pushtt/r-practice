@@ -1,0 +1,255 @@
+---
+title: "Data Visualisation with ggplot2"
+author: "Thinh"
+date: '2020-04-02'
+readingTime: yes
+slug: r-for-data-science
+tags: 
+  - R
+categories: 
+  - rfds
+---
+# Prerequisites
+```{r}
+library(tidyverse)
+```
+
+
+# mpg Data Frame 
+
+```{r}
+# load mpg data 
+ggplot2::mpg %>% head()
+```
+**Description**
+
+- `manufacturer`: manufacturer name
+- `model`: model name
+- `displ`: engine displacement, in litres
+- `year`: year of manufacture
+- `cyl`: number of cylinders
+- `trans`: type of transmission
+- `drv`: the type of drive train, where f = front-wheel drive, r = rear wheel drive, 4 = 4wd
+- `cty`: city miles per gallon
+- `hwy`: highway miles per gallon
+- `fl`: fuel type
+- `class`: "type" of car
+
+**Question** : What is the relationship between `displ` engine size and `hwy` fuel efficiency ?
+
+```{r}
+mpg %>% ggplot(mapping = aes(x = displ, y = hwy)) +
+  geom_point()
+```
+
+**Question** Is this relationship affected by the class of cars? 
+
+```{r}
+ggplot(data = mpg,
+       mapping = aes(x = displ, y = hwy, color = class)) + 
+  geom_point()
+```
+
+In `aes()` we can put: (to break down the graph with a variable )
+
+- `color`: color 
+- `size`: size
+- `alpha`: transparency of the point 
+- `shape`: shape of the point (by default 6 shapes at once)
+
+If we put out aes(), it changes the appearance of the plot.
+
+
+```{r}
+ggplot(data = mpg,
+       mapping = aes(x = displ, y = hwy)) +
+  geom_point(color = "blue")
+
+```
+
+
+# Facets 
+- helpful with the categorical data. 
+To facet a plot, use `facet_wrap()`
+
+```{r}
+ggplot(data = mpg,
+       mapping = aes(x = displ, y = hwy))+
+  geom_point() + 
+  facet_wrap(~ class, # pass a formula (data structure) to it
+             nrow = 3) # number of observations )
+```
+
+**facets a combination of 2 variables**
+- use `facet_grid()`
+
+```{r}
+ggplot(data = mpg, 
+       mapping = aes(x = displ, y = hwy)) +
+  geom_point() +
+  facet_grid(drv ~ cyl)
+```
+
+# Geometric Objects
+A geom is the geometrical object that a plot uses to represent data. 
+
+- Every geom function in ggplot2 takes a mapping argument. 
+- Depending on type of geom(), the obervations can be describe in different ways: lines, points, etc
+
+```{r}
+ggplot(data = mpg,
+       mapping = aes(x = displ, y = hwy, linetype = drv)) + 
+  geom_smooth()
+```
+This separates the cars into three lines based on their `drv` value. 
+- 4 stands for four-wheel
+- f stands for front-wheel
+- r stands for rear-wheel
+
+By overlaying the lines on the top of the raw data -> it make clearer how the data is fitted
+
+```{r}
+ggplot(data = mpg,
+       mapping = aes(x = displ, y = hwy, color = drv)) +
+  geom_point() + 
+  geom_smooth() 
+
+```
+
+If we place mappings in a geom function, **ggplot2**, treat them as local mappings for the layers. It will use these mappings to extend or overwrite the global mappings for that layer only.
+
+For examples
+
+```{r}
+ggplot(data = mpg, 
+       mapping = aes(x = displ, y = hwy)) + # global setting
+  geom_point(mapping = aes(color = drv)) + # local setting
+  geom_smooth()
+```
+Make it more complicated as 
+
+```{r}
+ggplot(data = mpg, 
+       mapping = aes(x = displ, y = hwy)) + 
+  geom_point(mapping = aes(color = drv)) + 
+  geom_smooth(data = filter(mpg, class == 'subcompact'),
+              se = FALSE)
+```
+
+
+# Statistical Transformation 
+
+```{r}
+ggplot(data = diamonds, 
+       mapping = aes(x = cut))+ 
+  geom_bar()
+```
+The chart shows that more diamonds are available with high-quality cuts 
+- barchart applies the `stat` (statistical transformation) to generate a new variable for `count` (`stat` default of bar chart)
+
+The algorithm used to calculate a new values for a graph is called `stat`, short for statistical transformation. Each geom is applied a default stat. However, it is possible to pass the statistical transformation into ggplot2.
+
+```{r}
+ggplot(data = diamonds) + 
+  stat_summary(
+    mapping = aes(x = cut, y = depth), 
+    fun.min = min,
+    fun.max = max,
+    fun = median
+  )
+```
+
+
+# Position adjustments 
+- color the plots
+
+```{r}
+# color the outside
+ggplot(data = diamonds,
+       mapping = aes(x = cut, color = cut)) +
+  geom_bar() 
+
+# color the inside
+ggplot(data = diamonds) + 
+  geom_bar(mapping = aes(x = cut, fill = cut))
+```
+
+**Stacked Bar**
+
+```{r}
+diamonds %>% ggplot(aes(x = cut, fill = clarity)) +
+  geom_bar()
+```
+
+Stacking is automatically performed by the **position adjustment** (`position`). To dogde the stacked barchart, there are 3 options:
+
+- `position = 'identity'`: instead of stacking, the result is overlapping
+```{r}
+ggplot(data = diamonds, 
+       mapping = aes(x = cut, fill = clarity)) + 
+  geom_bar(alpha = 1/5, position = 'identity') # overlapping each other
+```
+
+- `position = 'fill'`: 100% stacking barchart 
+
+```{r}
+ggplot(data = diamonds) +
+  geom_bar(mapping = aes(x = cut, fill = clarity), position = "fill")
+```
+
+- `position = 'dodge'`: place the overlapping objects beside one another. 
+
+```{r}
+ggplot(data = diamonds) +
+       geom_bar(mapping = aes(x = cut, fill = clarity), position = 'dodge')
+```
+
+- `position = 'jitter'`: add a small amount of random noise to spreads out the obversations instead of letting them overlapping each other (in case they are the same value ). Useful with large scale and scatterplot
+
+```{r}
+ggplot(data = mpg,
+       mapping = aes(x = displ, y = hwy)) + 
+  geom_point(position = 'jitter') + # slighly spreading out 
+  geom_point(color = 'blue') # original 
+ 
+```
+
+
+# Coordinate systems
+- `coord_flip()` switches x and y axes. 
+
+```{r}
+ggplot( data = mpg,
+       mapping = aes(x = class, y = hwy))+
+  geom_boxplot()
+```
+
+```{r}
+ggplot(data = mpg, 
+       mapping = aes(x = class, y = hwy)) +
+  geom_boxplot() + 
+  coord_flip() # instead of change x and y 
+```
+
+- `coord_polar()`: 
+
+```{r}
+ggplot(data = diamonds, 
+       mapping = aes(x = cut, fill = cut)) + 
+  geom_bar() +
+  coord_flip() + 
+  coord_polar()
+```
+
+# Template for visualisation with ggplot2
+A suggested way to write a code visualisation
+```
+ggplot(data = <DATA>) +  # start with data 
+  <GEOM_FUNCTION>( # transform it 
+     mapping = aes(<MAPPINGS>), # add layer of aesthetics 
+     stat = <STAT>, # overide stat if necessary
+     position = <POSITION>  # overide position if necessary 
+  ) +
+  <COORDINATE_FUNCTION> + # choose coordinate system
+  <FACET_FUNCTION> # facets if necessary 
+```

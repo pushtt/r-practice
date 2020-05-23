@@ -1,0 +1,50 @@
+---
+title: "Nuns"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+sisters67 <- read_csv("data/sisters.csv")
+
+glimpse(sisters67)
+```
+
+# Exploratory
+
+```{r}
+ggplot(sisters67, aes(x = age)) + 
+  geom_histogram(binwidth = 10)
+```
+
+## Tidy Data
+
+```{r}
+library(magrittr)
+
+tidy_sisters <- sisters67 %>% 
+  select(-sister) %>% 
+  pivot_longer(-age) %T>%
+  glimpse()
+
+```
+
+## What is the mean scores of all questions between group?
+This shows how agreement between different groups on certain questions
+
+```{r}
+tidy_sisters %>% 
+  group_by(age) %>% 
+  summarise(value = mean(value, na.rm = TRUE))
+```
+
+

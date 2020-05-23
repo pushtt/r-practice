@@ -1,0 +1,145 @@
+---
+title: Dates and Times with lubridate
+author: thinh
+date: '2020-04-08'
+slug: dates-and-times-with-lubridate
+categories:
+  - rfds
+tags:
+  - R
+comments: no
+cover: ''
+imgs: []
+justify: no
+lastmod: '2020-04-08T22:23:40+07:00'
+license: ''
+readingTime: yes
+single: no
+toc: yes
+---
+# Prerequisites
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(nycflights13)
+```
+
+
+# Creating Date/Times
+Three type of date/time data
+
+- *date*. <date>
+- *time*. <time>
+- *date-time*. <dttm>
+
+```{r}
+today()
+now()
+```
+
+Three ways to create a time 
+
+- string 
+- date-time components
+- existing date/time object
+
+## From strings
+
+```{r}
+ymd(20200330) # or ymd("2020-03-30")
+```
+
+```{r}
+ymd_hms(now())
+```
+
+# From Individual Components
+
+```{r}
+flights %>% 
+  select(year, month, day, hour, minute)
+```
+
+To make date time 
+
+```{r}
+flights %>% 
+  select(year, month, day, hour, minute) %>% 
+  mutate(departure = make_datetime(year, month, day, hour, minute))
+```
+
+## From Other Type
+
+```{r}
+as_datetime(today())
+```
+
+```{r}
+as_date(now())
+```
+
+# Date-Time Components
+## Getting components
+- `year()`, 
+- `month()` 
+- `mday()` (day of the month)
+- `yday()` (day of the year)
+- `wday()` (day of the week)
+- `hour()`
+- `minute()`
+- `second()`
+
+```{r}
+datetime <- ymd_hms("2020-03-30 11:59:59")
+```
+
+```{r}
+year(datetime)
+month(datetime)
+mday(datetime)
+wday(datetime)
+wday(datetime, label = TRUE)
+```
+
+## Rounding
+- `floor_date()` similar to date_trunc() in sql
+- `round_date()`
+- `ceiling_date()` 
+
+## Time Spans
+- *Durations* exact in seconds
+- *Periods* weeks or months 
+- *Intervals* starting and ending point of time
+
+```{r}
+(my_age <- today() - ymd(19940330))
+```
+
+**lubridate** provides an alternative that always uses seconds—the duration:
+```{r}
+as.duration(my_age)
+```
+
+A bunch of convenient constructors:
+```{r}
+dminutes(1)
+dyears(1)
+```
+
+## Periods
+Number of friendly constructor functions
+
+```{r}
+seconds(15)
+days(30)
+years(100)
+```
+
+## Time Zones
+
+```{r}
+Sys.timezone()
+today(tz = "Asia/Ho_Chi_Minh")
+```
+

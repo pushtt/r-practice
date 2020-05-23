@@ -1,0 +1,228 @@
+---
+title: Modelling with R
+author: thinh
+date: '2020-05-06'
+slug: modelling-with-r
+categories: []
+tags: []
+comments: no
+cover: ''
+imgs: []
+justify: no
+lastmod: '2020-05-06T22:07:03+07:00'
+license: ''
+readingTime: yes
+single: no
+editor_options: 
+  chunk_output_type: console
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(modelr) # for model 
+options(na.action = na.warn)
+```
+
+# Simulate Data 
+
+```{r}
+ggplot(sim1, aes(x, y)) + 
+  geom_point()
+```
+
+
+```{r}
+sim1_mod <- lm(y ~ x, data = sim1)
+# coefficient only
+coef(sim1_mod)
+```
+
+# Visualising models 
+
+```{r}
+grid <- sim1 %>% 
+  data_grid(x) %>% 
+  add_predictions(sim1_mod)
+```
+
+```{r}
+sim1 %>% ggplot(aes(x)) + 
+  geom_point(aes(y = y)) + 
+  geom_line(
+    aes(y = pred),
+    data = grid,
+    colour = "red", 
+    size = 1
+)
+```
+
+# Residuals
+
+```{r}
+sim1 <- sim1 %>% 
+  add_residuals(sim1_mod)
+```
+
+
+```{r}
+sim1 %>% 
+  ggplot(aes(resid)) + 
+  geom_freqpoly(binwidth = 0.5)
+```
+
+
+```{r}
+sim1 %>% 
+  ggplot(aes(x, resid)) + 
+  geom_ref_line(h = 0) +
+  geom_point()
+```
+
+
+# Categorical Variables
+
+```{r}
+sim2 %>% 
+  ggplot(aes(x, y)) + 
+  geom_point()
+```
+
+fit the model 
+
+```{r}
+mod2 <- lm(y ~ x , data = sim2)
+
+grid <- sim2 %>% 
+  data_grid(x) %>% 
+  add_predictions(mod2)
+grid
+```
+
+visualise 
+
+```{r}
+ggplot(sim2, aes(x)) +
+  geom_point(aes(y = y)) + 
+  geom_point(
+    aes(y = pred),
+    data = grid,
+    size = 4,
+    colour = "red"
+             )
+```
+
+## Interactions (Continuous and Categorical)
+
+```{r}
+sim3 %>% 
+  ggplot(aes(x1, y)) + 
+  geom_point(aes(colour = x2))
+```
+
+2 possible models fit the data
+
+```{r}
+mod1 <- lm(y ~ x1 + x2, data = sim3)
+mod2 <- lm(y ~ x1 * x2, data = sim3)
+```
+
+Prepare data for visualisation 
+
+```{r}
+grid <- sim3 %>% 
+  data_grid(x1, x2) %>% 
+  gather_predictions(mod1, mod2)
+grid 
+```
+
+Visualise
+
+```{r}
+ggplot(sim3, aes(x1, y, colour = x2)) + 
+  geom_point() + 
+  geom_line(data = grid, aes(y = pred)) + 
+  facet_wrap(~ model)
+```
+
+
+Which model is better?
+
+```{r}
+sim3 %>%
+  gather_residuals(mod1, mod2) %>% 
+  ggplot(aes(x1, resid, colour = x2)) + 
+  geom_point() + 
+  facet_grid(model ~ x2)
+```
+
+
+
+# Continous vs Continuous 
+
+```{r}
+mod1 <- lm(y ~ x1 + x2, data = sim4)
+mod2 <- lm(y ~ x1 * x2, data = sim4)
+```
+
+```{r}
+# prepare 
+
+grid <- sim4 %>% 
+  data_grid(
+    x1 = seq_range(x1, 5),
+    x2 = seq_range(x2, 5)
+  ) %>% 
+  gather_predictions(mod1, mod2)
+grid
+
+```
+
+```{r}
+# Visulaise
+
+grid %>% 
+  ggplot(aes(x1, x2)) + 
+  geom_tile(aes(fill = pred)) + 
+  facet_wrap(~model)
+```
+
+```{r}
+ggplot(grid, aes(x1, pred, color = x2, group = x2)) + 
+  geom_line() + 
+  facet_wrap(~ model) 
+
+ggplot(grid, aes(x2, pred, color = x1, group = x1)) + 
+  geom_line() + 
+  facet_wrap(~ model)
+```
+
+# Transformation 
+
+```{r}
+sim5 <- tibble(
+  x = seq(0, 3.5 * pi, length = 50), 
+  y = 4 * sin(x) + rnorm(length(x))
+)
+```
+
+```{r}
+mod1 <- lm(y ~ splines::ns(x,1), data = sim5)
+mod2 <- lm(y ~ splines::ns(x,2), data = sim5)
+mod3 <- lm(y ~ splines::ns(x,3), data = sim5)
+mod4 <- lm(y ~ splines::ns(x,4), data = sim5)
+mod5 <- lm(y ~ splines::ns(x,5), data = sim5)
+
+grid <- sim5 %>% 
+  data_grid(x = seq_range(x, n=50, expand = 0.1)) %>% 
+  gather_predictions(mod1, mod2, mod3, mod4, mod5, .pred = "y")
+```
+
+```{r}
+sim5 %>% 
+  ggplot(aes(x, y)) + 
+  geom_point() + 
+  geom_line(data = grid, colour = "red") +
+  facet_wrap(~model)
+```
+

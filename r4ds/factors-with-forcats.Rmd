@@ -1,0 +1,66 @@
+---
+title: Factors with forcats
+author: thinh
+date: '2020-04-08'
+slug: factors-with-forcats
+categories:
+  - rfds
+tags:
+  - R
+comments: no
+cover: ''
+imgs: []
+justify: no
+lastmod: '2020-04-08T21:49:58+07:00'
+license: ''
+readingTime: yes
+single: no
+toc: yes
+---
+# Prerequisites
+
+```{r}
+library(tidyverse)
+library(forcats)
+```
+
+# Create a factor
+
+```{r}
+month_levels <- c( "Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+                   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" )
+```
+
+```{r}
+x1 <- c("Dec", "Apr", "Jan", "Mar")
+sort(x1) # not helpful
+```
+
+```{r}
+y1 <- factor(x1, levels = month_levels)
+sort(y1)
+```
+
+# Modifying Factor Order
+
+```{r}
+relig <- gss_cat %>%
+  group_by(relig) %>% summarize(
+    age = mean(age, na.rm = TRUE),
+    tvhours = mean(tvhours, na.rm = TRUE),
+    n = n() )
+
+ggplot(relig, aes(tvhours, relig)) + geom_point()
+```
+
+It's difficult with the factor order. Then we use `fct_reorder()`
+
+- `f`, factor we want to modify 
+- `x`, numeric vector we want to use to reorder 
+- `fun` default median 
+
+```{r}
+ggplot(relig, aes(tvhours, fct_reorder(relig, tvhours))) + geom_point()
+```
+
+
