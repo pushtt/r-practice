@@ -83,7 +83,6 @@ summary(simple_lm)
 
 # Training, validation and testing data 
 
-
 ```{r}
 library(rsample)
 
@@ -100,5 +99,48 @@ validation_split <- validate_test %>%
 
 sisters_validate <- training(validation_split)
 sisters_test <- testing(validation_split)
+```
+
+```{r}
+library(caret)
+library(rpart)
+library(xgboost)
+sisters_cart <- train(age ~ ., method = "rpart", data = sisters_train)
+sisters_gbm <- train(age ~ ., method = "gbm", data = sisters_train)
+sisters_xgb <- train(age ~ ., method = "xgbTree", data = sisters_train)
+```
+
+# Make predictions on the three models 
+
+```{r}
+modeling_results <- sisters_validate %>% 
+  mutate(CART = predict(sisters_cart, sisters_validate),
+         GBM = predict(sister_gbm, sisters_validate),
+         XGB = predict(sister_xgb, sisters_validate))
+
+modeling_results %>% 
+  select(CART, GBM, XGB)
+```
+
+# Choosing between models
+
+```{r}
+library(yardstick)
+
+# ...CART model
+metrics(modeling_results, truth = age, estimate = CART)
+# ...gbm model
+metrics(modeling_results, truth = age, estimate = GBM)
+# ...xgboost model
+metrics(modeling_results, truth = age, estimate = XGB)
+```
+
+# Estimating uncertainty for new data
+
+```{r}
+# Calculate RMSE
+sisters_test %>%
+    mutate(prediction = predict(sisters_xgb, sisters_test)) %>%
+    rmse(truth = age, estimate = prediction)
 ```
 
