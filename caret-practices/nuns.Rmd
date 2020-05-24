@@ -47,4 +47,58 @@ tidy_sisters %>%
   summarise(value = mean(value, na.rm = TRUE))
 ```
 
+## What is the number of respondents? 
+```{r}
+tidy_sisters %>% 
+  count(value)
+```
+
+
+# Visualiastion 
+
+```{r}
+tidy_sisters %>% 
+  filter(name %in% paste0("v", 153:170)) %>% # pick up question 153-170
+  group_by(name, value) %>% 
+  summarise(age = mean(age, na.rm = TRUE)) %>% 
+  ggplot(aes(value, age, colour = name)) +
+  geom_line() +
+  theme(legend.position = "none") +
+  facet_wrap(~ name, nrow = 3)
+
+```
+
+
+# Building a simple linear regresison 
+
+```{r}
+sisters_select <- sisters67 %>% 
+  select(-sister)
+
+simple_lm <- lm(age ~ ., data = sisters_select)
+
+summary(simple_lm)
+```
+
+
+# Training, validation and testing data 
+
+
+```{r}
+library(rsample)
+
+train_split <- sisters_select %>% 
+  initial_split(prop = .6, strata = "age")
+
+sisters_train <- training(train_split)
+validate_test <- testing(train_split)
+
+# split to validation and testing 
+set.seed(1234)
+validation_split <- validate_test %>% 
+  initial_split(prop = .5, strata = "age")
+
+sisters_validate <- training(validation_split)
+sisters_test <- testing(validation_split)
+```
 
