@@ -1,0 +1,91 @@
+---
+title: "Exploring Data"
+author: "Thinh"
+date: "6/6/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+theme_set(theme_light())
+```
+
+```{r}
+cusdata <- read_rds("data/custdata.RDS") %>% as_tibble()
+
+cusdata
+```
+
+### Spotting the problems with a summary 
+
+```{r}
+skimr::skim(cusdata)
+```
+
+* Min(`income`) is negative so there is a potential problem. 
+* `is_employed` is a-third missing values
+* `age` range is from 0 to 120 which is questionable.
+* `income` has a wide range. Also the data should not be to narrow.
+
+### Spotting the problems using graphics and visualisation 
+* histogram
+* density 
+* barcharts
+```{r}
+cusdata %>% 
+  ggplot(aes(age)) + 
+  geom_density()
+
+cusdata %>% 
+  ggplot(aes(gas_usage)) + 
+  geom_histogram(binwidth = 10)
+```
+
+
+```{r}
+cusdata %>% 
+  ggplot(aes(income)) + 
+  geom_density() +
+  scale_x_log10(labels = scales::dollar, breaks = c(10, 100, 1000, 10000, 100000, 1000000)) +
+  scale_y_continuous(labels = scales::percent_format()) + 
+  annotation_logticks(sides = "bt", colour = "gray")
+```
+
+
+```{r}
+cusdata %>% 
+  count(marital_status, sort = TRUE) %>% 
+  ggplot(aes(marital_status, n)) + 
+  geom_col()
+```
+
+
+```{r}
+cusdata %>% 
+  count(state_of_res, sort = TRUE) %>% 
+  mutate(state_of_res = fct_reorder(state_of_res, n)) %>%  
+  ggplot(aes(state_of_res, n, fill = state_of_res)) + 
+  geom_col() + 
+  theme(legend.position = "None") + 
+  coord_flip()
+```
+
+
+```{r}
+set.seed(2345566)
+# reduce the size of data with sampling
+cusdata %>% 
+  sample_frac(size = .1, replace = FALSE) %>% 
+  filter(0 < age & age < 100 &
+         0 < income & income < 200000) %>% 
+  ggplot(aes(age, income)) + 
+  geom_point()
+```
+
+
+
+
