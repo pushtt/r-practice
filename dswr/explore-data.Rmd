@@ -6,7 +6,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
 ```
 
 ```{r}
@@ -20,29 +20,33 @@ cusdata <- read_rds("data/custdata.RDS") %>% as_tibble()
 cusdata
 ```
 
-### Spotting the problems with a summary 
+# Spotting the problems with a summary 
 
 ```{r}
 skimr::skim(cusdata)
 ```
+
+Summary statistics can help to spot the problems in the first place 
 
 * Min(`income`) is negative so there is a potential problem. 
 * `is_employed` is a-third missing values
 * `age` range is from 0 to 120 which is questionable.
 * `income` has a wide range. Also the data should not be to narrow.
 
-### Spotting the problems using graphics and visualisation 
+# Spotting the problems using graphics and visualisation 
 * histogram
 * density 
-* barcharts
+* bar charts
+* scatter plots and smoothing curves
+
 ```{r}
 cusdata %>% 
-  ggplot(aes(age)) + 
-  geom_density()
-
-cusdata %>% 
   ggplot(aes(gas_usage)) + 
-  geom_histogram(binwidth = 10)
+  geom_histogram(binwidth = 10) +
+  labs(
+    x = "Gas usage",
+    y = "Frequency",
+    title = "The distribution of gas usage")
 ```
 
 
@@ -52,7 +56,12 @@ cusdata %>%
   geom_density() +
   scale_x_log10(labels = scales::dollar, breaks = c(10, 100, 1000, 10000, 100000, 1000000)) +
   scale_y_continuous(labels = scales::percent_format()) + 
-  annotation_logticks(sides = "bt", colour = "gray")
+  annotation_logticks(sides = "bt", colour = "gray") + 
+  labs(
+    x = "Income",
+    y = "Density",
+    title = "The distribution of income"
+  )
 ```
 
 
@@ -60,7 +69,11 @@ cusdata %>%
 cusdata %>% 
   count(marital_status, sort = TRUE) %>% 
   ggplot(aes(marital_status, n)) + 
-  geom_col()
+  geom_col() + 
+  labs(
+    x = "Marital status", 
+    y = "# Customers"
+  )
 ```
 
 
@@ -71,21 +84,109 @@ cusdata %>%
   ggplot(aes(state_of_res, n, fill = state_of_res)) + 
   geom_col() + 
   theme(legend.position = "None") + 
-  coord_flip()
+  coord_flip() + 
+  labs(
+    x = "",
+    y = "# Customers",
+    title = "What is the state of residence of the customers?"
+  )
+  
 ```
 
 
 ```{r}
 set.seed(2345566)
 # reduce the size of data with sampling
-cusdata %>% 
+sample_custdata<- cusdata %>% 
   sample_frac(size = .1, replace = FALSE) %>% 
   filter(0 < age & age < 100 &
-         0 < income & income < 200000) %>% 
+         0 < income & income < 200000)
+  
+sample_custdata %>% 
   ggplot(aes(age, income)) + 
-  geom_point()
+  geom_point(alpha = .1) +
+  geom_smooth() +
+  labs(
+    x = "Age",
+    y = "Income",
+    title = "The relationship between ages and income"
+  )
 ```
 
 
+```{r}
+sample_custdata %>% 
+  ggplot(aes(age, income)) +
+  geom_hex(alpha = .8) + 
+  geom_smooth(colour = "black")
+```
 
+
+```{r}
+cusdata %>% 
+  count(marital_status, health_ins, sort = TRUE) %>% 
+  ggplot(aes(marital_status, n, fill = health_ins)) + 
+  geom_col() + 
+  labs(
+    x = "Martial status",
+    y = "# Customers",
+    fill = "Health insurance",
+    title = "Health insurance versus marital status"
+  )
+```
+
+```{r}
+cusdata %>% 
+  count(marital_status, health_ins, sort = TRUE) %>% 
+  ggplot(aes(marital_status, n, fill = health_ins)) + 
+  geom_col(position = position_dodge()) + 
+  labs(
+    x = "Martial status",
+    y = "# Customers",
+    fill = "Health insurance",
+    title = "Health insurance versus marital status"
+  )
+```
+
+
+```{r}
+cusdata %>% 
+  count(marital_status, health_ins, sort = TRUE) %>% 
+  ggplot(aes(marital_status, n, fill = health_ins)) + 
+  geom_col(position = position_stack()) + 
+  labs(
+    x = "Martial status",
+    y = "# Customers",
+    fill = "Health insurance",
+    title = "Health insurance versus marital status"
+  ) + 
+  scale_fill_gra
+```
+
+
+```{r}
+cusdata %>% 
+  filter(!is.na(housing_type)) %>% 
+  count(marital_status, housing_type, sort = TRUE) %>% 
+  mutate(housing_type = fct_reorder(housing_type, n),
+         marital_status = fct_reorder(marital_status, n)) %>% 
+  ggplot(aes(housing_type, n, fill = marital_status)) +
+  geom_col(position = position_dodge()) + 
+  scale_fill_brewer(palette = "Dark2") +
+  coord_flip() +
+  theme(legend.position = "None") +
+  facet_wrap(~ marital_status, ncol = 2, scales = "free_x") +
+  labs(
+    x = "# Customers",
+    y = "Housing Type",
+    title = "The distribution of marital status by housing type"
+  ) 
+```
+
+```{r}
+sample_custdata %>% 
+  ggplot(aes(age)) +
+  geom_histogram() + 
+  facet_wrap(~marital_status, scales = "free_x")
+```
 

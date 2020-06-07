@@ -1,0 +1,124 @@
+---
+title: "Managing Data"
+author: "Thinh"
+date: "6/7/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+cusdata <- read_rds("data/Custdata/custdata.RDS") %>% as_tibble()
+```
+
+
+
+```{r}
+cusdata_tidy <- cusdata %>% 
+  mutate(gas_with_rent = (gas_usage == 1),
+         gas_with_electricity = (gas_usage == 2),
+         no_gas_bill = (gas_usage == 3)) %>% 
+  mutate(gas_usage = ifelse(gas_usage < 4, NA, gas_usage))
+```
+
+
+```{r}
+cusdata_tidy %>% 
+  summarise(across(everything(), ~sum(is.na(.)))) %>% 
+  pivot_longer(cols = everything()) %>% 
+  arrange(desc(value))
+```
+
+
+```{r}
+input <- setdiff(colnames(cusdata_tidy), c("custid", "health_ins"))
+
+treatment_plan <- vtreat::design_missingness_treatment(cusdata_tidy, varlist = input)
+training_prepared <- treatment_plan %>% vtreat::prepare(cusdata_tidy)
+
+training_prepared %>% 
+  colnames()
+```
+
+# Data Transformations
+
+```{r}
+median_income_tab <- read_rds("data/Custdata/median_income.RDS")
+
+training_prepared %>% 
+  left_join(median_income_tab, "state_of_res") %>% 
+  mutate(income_normalised = income/median_income) %>% 
+  select(income, median_income, income_normalised)
+```
+
+
+## Normalisation
+
+```{r}
+training_prepared %>%
+  transmute(age/mean(age)) %>% 
+  summary()
+
+```
+
+## Centreing and scaling
+
+```{r}
+training_prepared %>% 
+  mutate(scaled_age = (age -mean(age))/sd(age)) %>% 
+  filter(abs(age - mean(age)) < sd(age)) %>% 
+  distinct(age, scaled_age)
+```
+
+### Multivariables at once 
+```{r}
+dataf_scaled <- training_prepared %>% 
+  select(age, income, num_vehicles, gas_usage) %>% 
+  mutate(across(everything(), scale))
+```
+
+### Keep the training transformation 
+
+## Log Transformation 
+
+```{r}
+p1 <- training_prepared %>% 
+  ggplot(aes(income)) + 
+  geom_density() +
+  scale_x_log10()  
+
+p2 <- training_prepared %>% 
+  ggplot(aes(income)) + 
+  geom_density()
+
+gridExtra::grid.arrange(p2, p1)
+```
+
+### signed logarithmn
+
+```{r}
+signedlog10 <- function(x) {
+  ifelse(abs(x) <= 1, 0, sign(x) * log10(abs(x)))
+}
+training_prepared %>% 
+  ggplot(aes(signedlog10(income))) +
+  geom_density()
+```
+
+# Sampling for modelling and validation 
+
+## Creating a sample group 
+
+
+```{r}
+library(rsample)
+set.seed(25643)
+train <- cusdata %>% 
+  initial_split(prop = 0.9)
+customer_test <- testing(cusdata_split)
+customer_train <- training(cusdata_split)
+```
+
