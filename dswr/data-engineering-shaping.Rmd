@@ -1,0 +1,523 @@
+---
+title: "Data enginnering and data shaping"
+author: "Thinh"
+date: "6/10/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(data.table)
+```
+
+# Data selection 
+## Subsetting rows and columns
+
+```{r}
+summary(iris)
+
+iris %>% 
+  ggplot(aes(x = Petal.Length, y = Petal.Width, shape = Species, color = Species) ) +
+  geom_point(size =2 ) + 
+  ggtitle("Petal dimensions by iris species: all measurements")
+```
+
+### base R
+```{r}
+iris[iris$Petal.Length > 2, c("Petal.Length", "Petal.Width", "Species"), drop = FALSE]
+```
+
+### data.table 
+
+```{r}
+iris_table <- data.table::as.data.table(iris)
+iris_table[iris_table$Petal.Length > 2, c("Petal.Length", "Petal.Width", "Species")]
+```
+
+### dplyr
+
+```{r}
+iris %>% 
+  filter(Petal.Length > 2) %>% 
+  select(Petal.Length, Petal.Width, Species)
+```
+
+
+## Removing records with imcomplete data
+
+```{r}
+glimpse(msleep)
+
+summary(msleep)
+```
+
+
+### base R 
+
+```{r}
+msleep[complete.cases(msleep), , drop = FALSE]
+```
+
+### data.table 
+``` {r}
+msleep_table <- as.data.table(msleep)
+msleep_table[complete.cases(msleep_table), ]
+```
+
+### dplyr
+
+```{r}
+msleep %>% 
+  filter(., complete.cases(.))
+```
+
+## Ordering rows
+
+```{r}
+purchase <- tribble(
+  ~day, ~hour, ~n_purchase,
+  1 , 9 , 5 ,
+  2 , 9 , 3 , 
+  2 , 11 , 5 ,
+  1 , 13 , 1 ,
+  2 , 13 , 3 ,
+  1 , 14 , 1
+)
+```
+
+### base R
+```{r}
+order_index <- with(purchase, order(day, hour))
+purchase_ordered <- purchase[order_index, ,drop = FALSE]
+purchase_ordered$running_total <- cumsum(purchase_ordered$n_purchase)
+purchase_ordered
+```
+
+
+### data.table 
+
+```{r}
+DT_purchase <- as.data.table(purchase)
+
+setorderv(DT_purchase, c("day", "hour"))
+
+DT_purchase[ , running_total := cumsum(n_purchase)]
+
+DT_purchase
+```
+
+### dplyr 
+
+
+```{r}
+purchase %>% 
+  arrange(day, hour) %>% 
+  mutate(sum = cumsum(n_purchase))
+```
+
+
+## Advanced use of ordering
+
+The cumulative sum of sales to be per day
+
+### R base 
+```{r}
+order_index <- with(purchase, order(day, hour))
+purchase_ordered <- purchase[order_index, , drop = FALSE]
+data_list <- split(purchase_ordered, purchase_ordered$day)
+data_list <- lapply(
+  data_list, 
+  function(di) {
+    di$running_total <- cumsum(di$n_purchase)
+    di
+  }
+)
+purchase_ordered <- do.call(base::rbind, data_list)
+rownames(purchase_ordered) <- NULL
+```
+
+### data.table
+```{r}
+DT_purchase <- as.data.table(purchase)[order(day, hour),
+                                       .(hour = hour,
+                                         n_purchase = n_purchase,
+                                        running_total = cumsum(n_purchase)),
+                                       by = "day"]
+DT_purchase
+```
+
+### dplyr 
+
+```{r}
+purchase %>% 
+  arrange(day, hour) %>% 
+  group_by(day) %>% 
+  mutate(running_total = cumsum(n_purchase)) %>% 
+  ungroup()
+```
+
+# Basic transform
+
+```{r}
+library(datasets)
+library(lubridate)
+glimpse(airquality)
+
+datestr <-  function(year, month, day) {
+  paste(year, month, day, sep = "-")
+}
+```
+
+### base R
+
+```{r}
+airquality_with_date <- airquality
+airquality_with_date$date <- with(airquality_with_date, ymd(datestr(1973, Month, Day)))
+airquality_with_date[ ,c("Ozone", "date")]
+```
+
+### data.table
+
+```{r}
+as.data.table(airquality)[,
+                          date := ymd(datestr(1973, Month, Day))][, c("Ozone", "date")]
+```
+
+### dplyr 
+
+```{r}
+airquality %>% 
+  mutate(date = make_date(1973, Month, Day)) %>% 
+  ggplot(aes(date, Ozone)) + 
+  geom_point() +
+  geom_line()
+```
+
+## Fill missing values
+
+```{r}
+library(zoo)
+```
+
+### base R
+
+```{r}
+airquality_corrected <- airquality_with_date
+airquality_corrected$OzoneCorrected <- na.locf(airquality_corrected$Ozone, na.rm = FALSE)
+```
+
+### data.table 
+
+```{r}
+DT_airquality_corrected <- as.data.table(airquality_with_date)[, 
+                     OzoneCorrected := na.locf(airquality_with_date$Ozone, na.rm = FALSE)]
+```
+
+### dplyr 
+
+```{r}
+airquality %>% 
+  mutate(date = make_date(1973, Month, Day)) %>% 
+  mutate(OzoneCorrected = zoo::na.locf(Ozone, na.rm = FALSE)) %>% 
+  ggplot(aes(date, OzoneCorrected)) +
+  geom_point() + 
+  geom_line()
+```
+
+# Aggregate transforms 
+## Combining many rows into summary rows
+
+### Base R
+
+```{r}
+iris_summary <- aggregate(
+  cbind(Petal.Length, Petal.Width) ~ Species,
+  data = iris,
+  FUN = mean)
+
+```
+
+### data.table 
+
+```{r}
+DT_iris <- as.data.table(iris)
+
+DT_iris[,
+        .(Petal.Length = mean(Petal.Length),
+          Petal.Width = mean(Petal.Width)), 
+        by = .(Species)]
+```
+
+### dplyr 
+
+```{r}
+iris %>% 
+  group_by(Species) %>% 
+  summarise(across(c(Petal.Length, Petal.Width), mean)) %>% 
+  ungroup()
+```
+
+
+## Window Function 
+
+### Base R
+
+```{r}
+iris_copy <- iris
+
+iris_copy$mean_petal_length <- 
+  ave(iris_copy$Petal.Length, iris_copy$Petal.Width, FUN = mean)
+```
+
+### data.table 
+
+```{r}
+DT_iris <- as.data.table(iris)
+
+DT_iris[,
+        `:=` (mean_petal_length = mean(Petal.Length),
+              mean_petal_width = mean(Petal.Width))]
+```
+
+
+### dplyr
+
+```{r}
+iris %>% 
+  group_by(Species) %>% 
+  mutate(across(c(Petal.Length, Petal.Width), mean, .names = "{col}_mean"))
+```
+
+
+# Multitable data transforms
+## Combining two or more ordered data frames quickly 
+
+```{r}
+product_table <- tribble(
+  ~product_id, ~price, 
+  "p1", 9.99, 
+  "p2", 16.29,
+  "p3", 19.99,
+  "p4", 5.49,
+  "p5", 24.49
+)
+
+sales_table <- tribble(
+  ~product_id, ~sold_store, ~sold_online, 
+  "p1", 6, 64,
+  "p2", 31, 1,
+  "p3", 30, 23,
+  "p4", 31, 67,
+  "p5", 43, 51
+)
+
+product_table2 <- tribble(
+  ~product_id, ~price,
+  "n1", 25.49,
+  "n2", 33.99,
+  "n3", 17.99
+)
+```
+
+## Appending Rows 
+
+### base R
+
+```{r}
+rbind(product_table, product_table2)
+```
+
+### data.table 
+
+```{r}
+library(data.table)
+rbindlist(list(product_table, product_table2))
+```
+
+### dplyr 
+
+```{r}
+product_table %>%  
+  bind_rows(product_table2)
+```
+
+## Splitting tables
+
+### base R 
+
+```{r}
+product_table_mask <- product_table
+product_table_mask$table <- "product_table"
+product_table2_mask <- product_table2
+product_table2_mask$table <- "product_table2"
+
+rbind_base <- rbind(product_table_mask, product_table2_mask)
+
+## split 
+
+split(rbind_base, rbind_base$table)
+```
+
+### data.table 
+
+```{r}
+dt <- as.data.table(rbind_base)
+
+dt[ , max_price := max(price), by = eval("table")]
+
+dt
+```
+
+
+### dplyr 
+
+```{r}
+rbind_base %>% 
+  group_by(table) %>% 
+  mutate(max_price = max(price)) %>% 
+  ungroup()
+```
+
+
+## Appending columns 
+
+### base R
+```{r}
+cbind(product_table, sales_table[, -1])
+```
+
+### data.table 
+
+```{r}
+cbind(as.data.table(product_table), 
+      as.data.table(sales_table[, -1]))
+```
+
+### dplyr 
+
+```{r}
+product_table %>% 
+  bind_cols(sales_table[, -1])
+```
+
+
+## Principal methods to combine from multiple tables
+ 
+### left join 
+
+### base R
+
+```{r}
+merge(product_table, sales_table, by = "product_id", all.x = TRUE)
+```
+ 
+### data.table 
+
+```{r}
+dt_product_table <- as.data.table(product_table)
+dt_sales_table <- as.data.table(sales_table)
+
+dt_sales_table[dt_product_table, on = "product_id"]
+
+merge(dt_product_table, dt_sales_table)
+```
+
+### dplyr
+
+```{r}
+product_table %>% 
+  left_join(sales_table)
+```
+
+
+# Reshaping Transform 
+
+Moving data between rows and columns - pivoting 
+
+## Moving data from wide to tall 
+
+*Data example*
+
+```{r}
+library(datasets)
+library(lubridate)
+
+# clean
+seatbelts <- as_tibble(Seatbelts) %>% 
+  mutate(dates = index(as.xts(time(Seatbelts))),
+         date = make_date(year(dates), month(dates), 01))
+         
+# restrict down to 1982 to 1983
+
+seatbelts_tidy <- seatbelts %>% 
+  filter(between(year(date), 1982, 1983)) %>% 
+  mutate(law = ifelse(law == 1, "new law", "pre-law")) %>% 
+  select(date, DriversKilled, front, rear, law)
+
+seatbelts_tidy %>% 
+  ggplot(aes(date, DriversKilled, colour = law)) + 
+  geom_point() +
+  geom_smooth(se = FALSE) + 
+  ggtitle("UK car drivers death by month")
+
+```
+
+**Questions**: how different between the seat positions in term of death? 
+
+### solution 1: `data.table::melt.data.table()`
+
+```{r}
+seatbelts_tidy %>% 
+  as.data.table() %>% 
+  melt.data.table(id.vars = NULL,
+                  measure.vars = c("DriversKilled", "front", "rear"),
+                  variable.name = "victim_type",
+                  value_name = "nvictims")
+```
+
+
+### solution 2: `tidyr`
+
+```{r}
+seatbelts_tidy %>% 
+  pivot_longer(c(DriversKilled, front, rear), names_to = "features", values_to = "nvictims") %>% 
+  ggplot(aes(date, nvictims, colour = law)) + 
+  geom_point() + 
+  geom_smooth(se = FALSE) + 
+  facet_wrap(~features, scales = "free_y", ncol = 1)
+```
+
+## Moving data from tall to wide 
+
+```{r}
+chickweight <- ChickWeight %>% 
+  as_tibble() %>% 
+  select(-Diet) %>% 
+  mutate(Chick = str_c("Chick", as.character(Chick)))
+  
+```
+
+
+### **solution 1**: `data.table::dcast.data.table()`
+
+```{r}
+chickweight %>%
+  as.data.table() %>% 
+  dcast.data.table(
+    Chick ~ Time, 
+    value.var = "weight"
+  )
+```
+
+
+### **solutionn 2** `tidyr`
+
+```{r}
+chickweight %>% 
+  pivot_wider(names_from = Time, values_from = weight)
+```
+
