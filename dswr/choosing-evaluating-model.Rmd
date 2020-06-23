@@ -1,0 +1,131 @@
+---
+title: "Choosing and Evaluating model"
+author: "Thinh"
+date: "6/18/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(rsample)
+library(caret)
+library(yardstick)
+theme_set(theme_light())
+```
+
+# Evaluating classfication 
+```{r}
+email_spam <- read_tsv("https://raw.githubusercontent.com/WinVector/PDSwR2/master/Spambase/spamD.tsv")
+
+email_spam <- email_spam %>% 
+  janitor::clean_names() %>% 
+  select(-rgroup) %>% 
+  mutate(spam = as_factor(spam))
+```
+
+
+```{r}
+set.seed(1234)
+
+spam_split <- email_spam %>%
+  initial_split()
+
+spam_training <- training(spam_split)
+spam_testing <- testing(spam_split)
+
+spam_model <- train(spam ~ ., 
+                    method = "glm",
+                    family = "binomial",
+                  data = spam_training
+                  )
+
+```
+
+
+```{r}
+spam_training_pred <- spam_training %>% 
+  mutate(pred = predict(spam_model, newdata = spam_training))
+
+spam_training_pred %>% 
+  conf_mat(truth = spam, estimate = pred)
+
+spam_training_pred %>% 
+  accuracy(truth = spam, estimate = pred)
+
+spam_training_pred %>% 
+  yardstick::precision(truth = spam, estimate = pred)
+
+spam_training_pred %>% 
+  yardstick::recall(truth = spam, estimate = pred)
+```
+
+
+```{r}
+spam_testing_pred <- spam_testing %>% 
+  mutate(pred = predict(spam_model, newdata = spam_testing)) 
+
+spam_testing_pred %>% 
+  conf_mat(truth = spam, estimate = pred)
+
+spam_testing_pred %>% 
+  accuracy(truth = spam, estimate = pred)
+
+spam_testing_pred %>% 
+  yardstick::precision(truth = spam, estimate = pred) 
+
+spam_testing_pred %>% 
+  yardstick::recall(truth = spam, estimate = pred) 
+
+spam_testing_pred %>% 
+  yardstick::f_meas(truth = spam, estimate = pred) 
+```
+
+# Evaluating scoring 
+
+```{r}
+crickets <- read_csv("https://raw.githubusercontent.com/WinVector/PDSwR2/master/cricketchirps/crickets.csv")
+```
+
+```{r}
+crickets %>% 
+  ggplot(aes(chirp_rate,temperatureF)) +
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE)
+```
+
+```{r}
+crickets_model <- lm(chirp_rate ~ temperatureF, data = crickets)
+
+library(broom)
+
+glance(crickets_model)
+```
+
+
+# Evaluating probability models
+
+```{r}
+spam_testing_prob <- spam_testing %>% 
+  mutate(spam = ifelse(spam == "spam", 1, 0))
+
+spam_trainning_prob <- spam_training %>% 
+  mutate(spam = ifelse(spam == "spam", 1, 0))
+
+spam_model_prob <- glm(spam ~ ., data = spam_trainning_prob, family = binomial)
+
+spam_testing_prob %>%
+  mutate(pred = predict(spam_model_prob, newdata = spam_testing_prob, type = "response")) %>% 
+  mutate(spam = ifelse(spam == 1, "spam", "non-spam")) %>% 
+  ggplot(aes(pred, colour = spam, fill = spam)) +
+  geom_density(alpha = .4)
+```
+
+## ROC 
+```{r}
+
+```
+

@@ -514,10 +514,12 @@ chickweight %>%
 ```
 
 
-### **solutionn 2** `tidyr`
+### **solution 2** `tidyr`
 
 ```{r}
 chickweight %>% 
   pivot_wider(names_from = Time, values_from = weight)
 ```
+
+
 
