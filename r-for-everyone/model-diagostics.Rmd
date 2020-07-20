@@ -1,0 +1,135 @@
+---
+title: "Model Diagnostics"
+author: "Thinh"
+date: "7/20/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+housing <- read_csv("http://www.jaredlander.com/data/housing.csv")
+
+names(housing) <- c("Neighborhood", "Class", "Units", "YearBuilt",  "SqFt", "Income", "IncomePerSqFt", "Expense", "ExpensePerSqFt", "NetIncome", "Value", "ValuePerSqFt", "Boro")
+```
+
+Brooklyn and Queens make up one mode and Manhattan makes up the other, while there is not much data on the Bronx and Staten Island
+
+```{r}
+housing %>% 
+  ggplot(aes(ValuePerSqFt, fill = Boro)) +
+  geom_histogram(binwidth = 10) + 
+  labs(x = "Value per square foot") + 
+  facet_wrap(~ Boro)
+```
+
+
+```{r}
+housing %>% 
+  filter(Units < 1000) %>% 
+  ggplot(aes(SqFt)) + 
+  geom_histogram()
+
+housing %>% 
+  filter(Units < 1000) %>%
+  ggplot(aes(Units)) + 
+  geom_histogram()
+
+gridExtra::grid.arrange()
+```
+There are few outliers beyond 1000. It's reasonable to drop them out? Let see some more information 
+
+```{r}
+housing %>% 
+  ggplot(aes(SqFt, ValuePerSqFt, colour = Units)) + 
+  geom_point() + 
+  scale_x_continuous(labels = scales::comma) +
+  scale_colour_gradient2(low = "green", high = "red", mid = "white", midpoint = 1000)
+```
+
+
+```{r}
+housing %>% 
+  ggplot(aes(Units, ValuePerSqFt, colour = Units)) + 
+  geom_point() + 
+  scale_x_continuous(labels = scales::comma) +
+  scale_colour_gradient2(low = "green", high = "red", mid = "white", midpoint = 1000)
+```
+
+It's reasonable to drop them out. 
+
+
+# Modelling 
+
+```{r}
+house1 <- housing %>% 
+  lm(ValuePerSqFt ~ Units + SqFt + Boro, data = .)
+
+summary(house1)
+broom::tidy(house1)
+```
+
+```{r}
+coefplot::coefplot(house1)
+```
+
+
+
+# How do we judge the quality of a model? 
+This could be an analysis of residuals, the results of an ANOVA test or a Wald test, drop-in deviance, the AIC or BIC score, cross-validation error or bootstrapping
+
+## Residuals 
+
+The difference between actual response and the fitted values. 
+The idea is if the model is appropriately fitted to the data, the residuals should be **normally distributed**
+
+## Residuals versus Fitted 
+```{r}
+h1 <- augment(house1) %>% 
+  ggplot(aes(.fitted, .resid)) + 
+  geom_point() + 
+  geom_hline(yintercept = 0, colour = "grey") + 
+  geom_smooth(se = FALSE) + 
+  labs(
+    x = "Fitted Value",
+    y = "Residuals",
+    title = "Plot of residuals versus fitted values for house1"
+  )
+
+h1
+```
+
+It's clearly not random.
+
+```{r}
+h1 +
+  geom_point(aes(color = Boro))
+```
+
+
+## QQ Plot
+
+```{r}
+augment(house1) %>% 
+  ggplot(aes(sample = .std.resid)) + 
+  geom_qq() +
+  geom_abline()
+```
+
+If the model is a good fit, the standardized residuals should all fall along a straight line when plotted against the theoretical quantiles of the normal distribution.
+
+## Histogram of residuals 
+
+```{r}
+augment(house1) %>% 
+  ggplot(aes(.resid)) + 
+  geom_histogram()
+```
+This does not look normally distributed, meaning our model is incomplete

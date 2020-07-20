@@ -1,0 +1,34 @@
+---
+title: "Liner Model Selection And Regularisation"
+author: "Thinh"
+date: "6/28/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+theme_set(theme_light())
+
+credit <- read_csv("ISLR-Auto/Credit.csv") %>% 
+  select(Balance, Rating, Income, Limit, Student)
+```
+
+
+```{r}
+library(caret)
+
+model <-  train(Balance ~ . , data = credit, method = "glmnet")
+```
+
+```{r}
+broom::tidy(model$finalModel) %>% 
+  ggplot(aes(lambda, estimate, colour = term)) + 
+  geom_line()
+
+plot(model$finalModel, xvar = "lambda", label = TRUE)
+```
+
