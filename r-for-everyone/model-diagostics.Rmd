@@ -33,17 +33,16 @@ housing %>%
 
 ```{r}
 housing %>% 
-  filter(Units < 1000) %>% 
   ggplot(aes(SqFt)) + 
   geom_histogram()
 
 housing %>% 
-  filter(Units < 1000) %>%
   ggplot(aes(Units)) + 
   geom_histogram()
 
 gridExtra::grid.arrange()
 ```
+
 There are few outliers beyond 1000. It's reasonable to drop them out? Let see some more information 
 
 ```{r}
@@ -73,7 +72,9 @@ house1 <- housing %>%
   lm(ValuePerSqFt ~ Units + SqFt + Boro, data = .)
 
 summary(house1)
-broom::tidy(house1)
+
+library(broom)
+tidy(house1)
 ```
 
 ```{r}
@@ -133,3 +134,44 @@ augment(house1) %>%
   geom_histogram()
 ```
 This does not look normally distributed, meaning our model is incomplete
+
+
+## Comparing Models 
+
+```{r}
+house2 <- housing %>% 
+  lm(ValuePerSqFt ~ Units * SqFt + Boro, data = .)
+
+house3 <- housing %>% 
+  lm(ValuePerSqFt ~ Units + SqFt * Boro, data = .)
+
+house4 <- housing %>% 
+  lm(ValuePerSqFt ~ Units * SqFt + Boro + SqFt*Class, data = .)
+
+house5 <- housing %>% 
+  lm(ValuePerSqFt ~ Boro + Class, data = .)
+```
+
+
+```{r}
+coefplot::multiplot(house1, house2, house3, house4, house5)
+```
+
+This shows that only Boro and some condominium types matter.
+Which model is the best? 
+
+### ANOVA 
+
+```{r}
+anova(house1, house2, house3, house4, house5)
+```
+
+This shows that the fourth model, house4, has the lowest RSS, meaning it is the best model of the bunch. The problem with RSS is that it always improves when an additional variable is added to the model
+
+### AIC, BIC
+Another metric, which penalizes model complexity, is the Akaike Information Criterion (AIC). As with RSS, the model with the lowest AIC—even negative values—is considered optimal. The BIC (Bayesian Information Criterion) is a similar measure where, once again, lower is better.
+
+```{r}
+AIC(house1, house2, house3, house4, house5)
+```
+
