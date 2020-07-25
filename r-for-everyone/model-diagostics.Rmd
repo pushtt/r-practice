@@ -299,3 +299,79 @@ cvResults %>%
   theme(axis.text.x = element_text(angle = 90))
 ```
 
+
+# Bootstrap
+
+Measuring uncertainty for confidence intervals.  
+The idea is we start with n rows of data. 
+* Some statistic is applied to the data. 
+* The the data is sampled, creating a new dataset. The new set still has n rows except the are repeats and other rows are entirely missing. 
+* The statistic is applied to the new dataset.
+* The process is repeated R times (around 1200) which generates an entire distribution for the statistic. This distribution can be used to find the mean and the confidence interval for the statistic. 
+
+
+```{r}
+# import baseball data 
+baseball <- plyr::baseball %>% filter(year >= 1990)
+
+baseball %>% 
+  summarise(hits = sum(h),
+            at_bats = sum(ab),
+            hits/at_bats)
+```
+
+
+```{r}
+bat.avg <- function(data, indices = 1:NROW(data), hits = "h", at.bats = "ab") {
+  sum(data[indices, hits], na.rm = TRUE) /
+    sum(data[indices, at.bats], na.rm = TRUE)
+}
+bat.avg(baseball)
+# bootstrap it 
+# using the baseball data, call bat.avg  1200 items
+# pass indices to the function 
+
+avgBoot <- boot(data = baseball, statistic = bat.avg, R = 1200, stype = "i")
+
+# print original measure and estimates of the biases and standard error 
+avgBoot
+
+# print the confidence interval 
+boot.ci(avgBoot, conf = .95, type = "norm") 
+```
+
+Visualising the distribution is as simple as plotting a histogram 
+
+```{r}
+ggplot() +
+  geom_histogram(aes(avgBoot$t), fill = "grey", colour = "grey") + 
+  geom_vline(xintercept = avgBoot$t0 + c(-1, 1) * 2 * sqrt(var(avgBoot$t)), linetype = 2)
+```
+Histogram of the batting average bootstrap. The vertical lines are two standard errors from the original estimate in each direction. They make up the bootstrapped 95% confidence interval.
+
+
+# Stepwise Variable Selection 
+
+A common, though becoming increasingly discouraged, way to select variables for a model is stepwise selection. This is the process of iteratively adding and removing variables from a model and testing the model at each step, usually using AIC
+
+The step function iterates through possible models. The scope argument specifies a lower and upper bound on possible models. The direction argument specifies whether variables are just added into the model, just subtracted from the model or added and subtracted as necessary
+
+```{r}
+# the lowest model is the null the model, basically the straight average 
+nullModel <- lm(ValuePerSqFt ~ 1, data = housing)
+# the largest model we will accept 
+fullModel <- lm(ValuePerSqFt ~ Units + SqFt * Boro + Boro * Class, data = housing)
+# try different models 
+# start with the nullModel 
+# do not go above the fullModel 
+# work in both directions 
+houseStep <- step(nullModel, 
+                  scope = list(lower=nullModel, upper = fullModel),
+                  direction= "both")
+
+
+# reveal the chosen model 
+houseStep
+```
+Ultimately, step decided that fullModel was optimal with the lowest AIC. While this works, it is a bit of a brute force method and has its own theoretical problems. Lasso regression arguably does a better job of variable selection
+
